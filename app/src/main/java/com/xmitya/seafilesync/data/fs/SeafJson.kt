@@ -23,6 +23,21 @@ object SeafJson {
     /** Lenient enough to read whatever the server sends. Parsing only. */
     val parser = Json { ignoreUnknownKeys = true }
 
+    /**
+     * Encoder for request bodies.
+     *
+     * `encodeDefaults` is essential rather than cosmetic: kotlinx omits any property still equal
+     * to its default, so a commit whose creator is the all-zero id -- which is exactly what a
+     * client writes -- arrived without the field at all, and the server rejected it for having a
+     * creator that is not 40 characters. `explicitNulls` stays off because the server parses
+     * several fields as plain ints, which a JSON null would fail to unmarshal.
+     */
+    val encoder = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        explicitNulls = false
+    }
+
     fun canonicalize(element: JsonElement): String = buildString { write(element, this) }
 
     private fun write(element: JsonElement, out: StringBuilder) {

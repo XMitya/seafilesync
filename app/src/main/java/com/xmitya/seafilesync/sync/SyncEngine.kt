@@ -7,6 +7,7 @@ import com.xmitya.seafilesync.data.db.FileIndexEntity
 import com.xmitya.seafilesync.data.db.SyncedRepoDao
 import com.xmitya.seafilesync.data.db.SyncedRepoEntity
 import com.xmitya.seafilesync.data.prefs.Account
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,12 +54,16 @@ class SyncEngine(
      */
     private val apiFor: (serverUrl: String) -> SeafileApi,
     private val seafHttpFor: (serverUrl: String) -> SeafHttpApi,
+    private val deviceName: String = "Android",
+    private val clientVersion: String = "1.0",
+    private val treeBuilder: LocalTreeBuilder = LocalTreeBuilder(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     private class Session(val api: SeafileApi, val seafHttp: SeafHttpApi) {
         val treeReader = RemoteTreeReader(seafHttp)
         val downloader = Downloader(seafHttp)
+        val uploader = Uploader(seafHttp)
     }
 
     private fun sessionFor(account: Account) =
@@ -113,7 +118,10 @@ class SyncEngine(
             // silently skipping a sync pass.
             .getOrElse { return tracked }
 
-        return tracked.filter { heads[it.repoId] != it.lastSyncedCommitId }
+        // Repos whose head moved go first; the rest are still visited, because a local-only
+        // change produces no remote movement and would otherwise never be noticed.
+        val (moved, unchanged) = tracked.partition { heads[it.repoId] != it.lastSyncedCommitId }
+        return moved + unchanged
     }
 
     suspend fun syncAll(account: Account): List<SyncOutcome> =
@@ -133,6 +141,7 @@ class SyncEngine(
             outcome
         } catch (failure: IOException) {
             val reason = failure.message ?: failure::class.simpleName.orEmpty()
+            Log.w(TAG, "Sync of ${repo.name} failed", failure)
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_ERROR, reason)
             _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
             SyncOutcome.Failed(repo.repoId, reason)
@@ -146,8 +155,19 @@ class SyncEngine(
         val headCommitId = head.headCommitId ?: return SyncOutcome.UpToDate(repo.repoId)
 
         if (headCommitId == repo.lastSyncedCommitId) {
+            // The server has not moved, but the user may have. Local changes have to be looked
+            // for here as well, or an edit made while nobody else touched the library would sit
+            // on the device forever.
+            val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
+            val pushed = pushLocalChanges(
+                session, account, repo, token, File(repo.localPath), headCommitId, commit.rootId,
+            )
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_IDLE)
-            return SyncOutcome.UpToDate(repo.repoId)
+            return if (pushed == null) {
+                SyncOutcome.UpToDate(repo.repoId)
+            } else {
+                SyncOutcome.Synced(repo.repoId, pushed, 0)
+            }
         }
 
         val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
@@ -214,7 +234,74 @@ class SyncEngine(
         // Only now is the working tree actually at this commit. Recording it earlier would make
         // an interrupted sync look complete and leave files permanently stale.
         repos.markSynced(repo.repoId, headCommitId, clock())
-        return SyncOutcome.Synced(repo.repoId, headCommitId, downloaded)
+
+        val pushed = pushLocalChanges(session, account, repo, token, root, headCommitId, commit.rootId)
+        return SyncOutcome.Synced(repo.repoId, pushed ?: headCommitId, downloaded)
+    }
+
+    /**
+     * Publishes local changes, if there are any and the library allows writing.
+     *
+     * Whether anything changed is decided by rebuilding the tree and comparing its root id with
+     * the server's. Because ids are content hashes, an identical tree produces an identical root,
+     * so this is an exact answer rather than a heuristic -- and it costs a scan, not a transfer.
+     */
+    private suspend fun pushLocalChanges(
+        session: Session,
+        account: Account,
+        repo: SyncedRepoEntity,
+        token: String,
+        root: File,
+        remoteCommitId: String,
+        remoteRootId: String,
+    ): String? {
+        if (!repo.isWritable) return null
+
+        val tree = treeBuilder.build(root, account.email)
+        if (tree.rootId == remoteRootId) return null
+
+        val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
+        val added = tree.files.keys.filterNot { it in previous }
+        val modified = tree.files.filter { (path, entry) ->
+            previous[path]?.fileId?.let { it != entry.fileId } == true
+        }.keys.toList()
+        val removed = previous.keys.filterNot { it in tree.files }
+
+        val result = session.uploader.push(
+            token = token,
+            repoId = repo.repoId,
+            repoName = repo.name,
+            tree = tree,
+            parentCommitId = remoteCommitId,
+            creatorName = account.email,
+            deviceName = deviceName,
+            clientVersion = clientVersion,
+            description = CommitDescription.describe(added, modified, removed),
+            now = clock(),
+        )
+
+        // The server may have merged this with someone else's commit, so the head it now reports
+        // can differ from what was just published. Re-reading it keeps the next delta correct.
+        val head = session.seafHttp.headCommitId(token, repo.repoId).headCommitId ?: result.commitId
+
+        fileIndex.deleteForRepo(repo.repoId)
+        fileIndex.upsertAll(
+            tree.files.values.map { entry ->
+                val onDisk = File(root, entry.path.trimStart('/'))
+                FileIndexEntity(
+                    repoId = repo.repoId,
+                    path = entry.path,
+                    fileId = entry.fileId,
+                    sizeBytes = entry.sizeBytes,
+                    serverModifiedSeconds = entry.modifiedSeconds,
+                    localSizeBytes = onDisk.length(),
+                    localModifiedMillis = onDisk.lastModified(),
+                    blockIds = entry.blocks.map { it.id },
+                )
+            }
+        )
+        repos.markSynced(repo.repoId, head, clock())
+        return head
     }
 
     private suspend fun syncToken(session: Session, account: Account, repoId: String): String {
@@ -228,6 +315,10 @@ class SyncEngine(
             val current = status.activeRepos[repoId] ?: return@update status
             status.copy(activeRepos = status.activeRepos + (repoId to transform(current)))
         }
+    }
+
+    private companion object {
+        const val TAG = "SeafileSync"
     }
 
     /**

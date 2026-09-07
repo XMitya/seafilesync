@@ -1,0 +1,172 @@
+package com.xmitya.seafilesync.sync
+
+import com.xmitya.seafilesync.data.fs.FsObject
+import com.xmitya.seafilesync.data.fs.ObjectId
+import com.xmitya.seafilesync.data.fs.SeafDir
+import com.xmitya.seafilesync.data.fs.SeafDirent
+import com.xmitya.seafilesync.data.fs.SeafFile
+import java.io.File
+
+/**
+ * A block that exists locally, identified but not read into memory. Blocks are up to 8 MiB and a
+ * library can hold thousands, so they are described by where they live and read only when the
+ * server says it is missing that one.
+ */
+data class LocalBlock(val id: String, val file: File, val offset: Long, val length: Int) {
+
+    fun read(): ByteArray = file.inputStream().use { stream ->
+        stream.skip(offset)
+        val buffer = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val n = stream.read(buffer, read, length - read)
+            if (n < 0) break
+            read += n
+        }
+        if (read == length) buffer else buffer.copyOf(read)
+    }
+}
+
+data class LocalFileEntry(
+    val path: String,
+    val fileId: String,
+    val sizeBytes: Long,
+    val modifiedSeconds: Long,
+    val blocks: List<LocalBlock>,
+)
+
+/**
+ * The local tree expressed the way the server stores it: content-addressed objects plus the
+ * blocks they reference.
+ */
+data class LocalTree(
+    val rootId: String,
+    val objects: Map<String, FsObject>,
+    val files: Map<String, LocalFileEntry>,
+    val blocks: Map<String, LocalBlock>,
+)
+
+/**
+ * Turns a directory on disk into Seafile objects.
+ *
+ * Blocks are fixed size rather than content-defined. The server deduplicates purely by the SHA-1
+ * of a block's contents and never checks where the boundaries fell, so fixed splitting is fully
+ * correct on the wire; it only gives up dedup against blocks the desktop client cut differently.
+ * Rabin chunking is a later optimisation, not a correctness requirement.
+ */
+class LocalTreeBuilder(
+    private val blockSize: Int = DEFAULT_BLOCK_SIZE,
+    private val ignore: (File) -> Boolean = ::isIgnored,
+) {
+
+    fun build(root: File, modifier: String): LocalTree {
+        val objects = mutableMapOf<String, FsObject>()
+        val files = mutableMapOf<String, LocalFileEntry>()
+        val blocks = mutableMapOf<String, LocalBlock>()
+        val rootId = buildDirectory(root, "", modifier, objects, files, blocks)
+        return LocalTree(rootId, objects, files, blocks)
+    }
+
+    private fun buildDirectory(
+        directory: File,
+        prefix: String,
+        modifier: String,
+        objects: MutableMap<String, FsObject>,
+        files: MutableMap<String, LocalFileEntry>,
+        blocks: MutableMap<String, LocalBlock>,
+    ): String {
+        val entries = mutableListOf<SeafDirent>()
+
+        for (child in directory.listFiles().orEmpty().sortedBy { it.name }) {
+            if (ignore(child)) continue
+            val path = "$prefix/${child.name}"
+
+            if (child.isDirectory) {
+                val id = buildDirectory(child, path, modifier, objects, files, blocks)
+                entries += SeafDirent.directory(
+                    id = id,
+                    name = child.name,
+                    mtime = child.lastModified() / 1000,
+                )
+            } else {
+                val entry = buildFile(child, path, objects, blocks)
+                files[path] = entry
+                entries += SeafDirent.file(
+                    id = entry.fileId,
+                    name = child.name,
+                    mtime = entry.modifiedSeconds,
+                    size = entry.sizeBytes,
+                    modifier = modifier,
+                )
+            }
+        }
+
+        // Descending name order over raw UTF-8 bytes, matching how the server stores dirents.
+        // Any other order produces a different directory id for identical content.
+        val dir = SeafDir(entries).sorted()
+        val id = dir.id
+        objects[id] = dir
+        return id
+    }
+
+    private fun buildFile(
+        file: File,
+        path: String,
+        objects: MutableMap<String, FsObject>,
+        blocks: MutableMap<String, LocalBlock>,
+    ): LocalFileEntry {
+        val blockList = mutableListOf<LocalBlock>()
+        val size = file.length()
+
+        file.inputStream().buffered().use { stream ->
+            var offset = 0L
+            val buffer = ByteArray(blockSize)
+            while (offset < size) {
+                var read = 0
+                while (read < blockSize) {
+                    val n = stream.read(buffer, read, blockSize - read)
+                    if (n < 0) break
+                    read += n
+                }
+                if (read == 0) break
+                val bytes = if (read == blockSize) buffer.copyOf() else buffer.copyOf(read)
+                val block = LocalBlock(ObjectId.ofBytes(bytes), file, offset, read)
+                blockList += block
+                blocks[block.id] = block
+                offset += read
+            }
+        }
+
+        val seafFile = SeafFile(blockIds = blockList.map { it.id }, size = size)
+        val fileId = seafFile.id
+        objects[fileId] = seafFile
+
+        return LocalFileEntry(
+            path = path,
+            fileId = fileId,
+            sizeBytes = size,
+            modifiedSeconds = file.lastModified() / 1000,
+            blocks = blockList,
+        )
+    }
+
+    companion object {
+        /** Matches what the only other third-party block-protocol client uses. */
+        const val DEFAULT_BLOCK_SIZE = 8 * 1024 * 1024
+
+        /**
+         * Things that should never reach the server: platform droppings, editor scratch files,
+         * and this app's own partial downloads.
+         */
+        fun isIgnored(file: File): Boolean {
+            val name = file.name
+            return name == ".DS_Store" ||
+                name == "Thumbs.db" ||
+                name == "seafile-ignore.txt" ||
+                name.endsWith(".seafile-part") ||
+                name.endsWith(".tmp") ||
+                name.startsWith(".~") ||
+                name.startsWith("~$")
+        }
+    }
+}

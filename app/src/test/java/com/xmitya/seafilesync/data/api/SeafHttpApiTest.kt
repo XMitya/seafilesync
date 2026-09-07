@@ -170,6 +170,57 @@ class SeafHttpApiTest {
     }
 
     @Test
+    fun `routes carrying a query string keep their trailing slash`() = runTest {
+        // The fileserver answers 404 for these paths without the slash even though its route
+        // declares it optional. Download hides the problem because pack-fs takes no query
+        // parameters, so only the endpoints below actually break.
+        enqueue("")
+        api.quotaCheck(token, repoId, delta = 1)
+        assertTrue(server.takeRequest().path!!.startsWith("/seafhttp/repo/$repoId/quota-check/?"))
+
+        enqueue("")
+        api.permissionCheck(token, repoId, "upload")
+        assertTrue(server.takeRequest().path!!.startsWith("/seafhttp/repo/$repoId/permission-check/?"))
+
+        enqueue(fixture("fs-id-list.json"))
+        api.fsIdList(token, repoId, serverHead = "b".repeat(40))
+        assertTrue(server.takeRequest().path!!.startsWith("/seafhttp/repo/$repoId/fs-id-list/?"))
+
+        enqueue("")
+        api.updateHead(token, repoId, "d".repeat(40))
+        assertTrue(server.takeRequest().path!!.startsWith("/seafhttp/repo/$repoId/commit/HEAD/?"))
+    }
+
+    @Test
+    fun `a pushed commit carries the fields the server validates`() = runTest {
+        // kotlinx omits properties still equal to their default, which silently dropped the
+        // all-zero creator id -- the value a client actually writes -- and the server rejected
+        // the commit for having a creator that is not 40 characters.
+        enqueue("")
+
+        api.putCommit(
+            token, repoId,
+            com.xmitya.seafilesync.data.api.model.CommitDto(
+                commitId = "d".repeat(40),
+                rootId = "e".repeat(40),
+                repoId = repoId,
+                creatorName = "test@example.com",
+                description = "Added \"a.txt\"",
+                ctime = 1_700_000_000,
+                parentId = "f".repeat(40),
+            ),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue("creator must be present", body.contains(""""creator":"${"0".repeat(40)}""""))
+        assertTrue(body.contains(""""repo_id":"$repoId""""))
+        assertTrue(body.contains(""""root_id":"${"e".repeat(40)}""""))
+        assertTrue(body.contains(""""version":1"""))
+        // Nulls are dropped: the server parses several of these as plain ints.
+        assertTrue("no nulls in the body", !body.contains("null"))
+    }
+
+    @Test
     fun `head update passes the commit as a query parameter`() = runTest {
         enqueue("")
 

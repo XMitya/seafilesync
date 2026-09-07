@@ -34,7 +34,7 @@ class SeafHttpApi(
 
     suspend fun permissionCheck(token: String, repoId: String, operation: String) {
         request(token) {
-            url(repo(repoId).addPathSegment("permission-check").addQueryParameter("op", operation).build())
+            url(endpoint(repoId, "permission-check").addQueryParameter("op", operation).build())
         }.consume { }
     }
 
@@ -58,10 +58,18 @@ class SeafHttpApi(
             .consume { SeafJson.parser.decodeFromString(it.string()) }
 
     suspend fun putCommit(token: String, repoId: String, commit: CommitDto) {
-        request(token) {
-            url(repo(repoId).addPathSegments("commit/${commit.commitId}").build())
-            put(json(SeafJson.parser.encodeToString(commit)))
-        }.consume { }
+        val body = SeafJson.encoder.encodeToString(commit)
+        try {
+            request(token) {
+                url(repo(repoId).addPathSegments("commit/${commit.commitId}").build())
+                put(json(body))
+            }.consume { }
+        } catch (rejected: SeafileException) {
+            // The server validates the commit and answers with a bare status, so without the
+            // body there is nothing to debug against.
+            android.util.Log.w("SeafileSync", "Server rejected commit: $body")
+            throw rejected
+        }
     }
 
     /**
@@ -71,7 +79,8 @@ class SeafHttpApi(
      */
     suspend fun updateHead(token: String, repoId: String, commitId: String) {
         request(token) {
-            url(repo(repoId).addPathSegments("commit/HEAD").addQueryParameter("head", commitId).build())
+            url(repo(repoId).addPathSegment("commit").addPathSegment("HEAD").addPathSegment("")
+                .addQueryParameter("head", commitId).build())
             put(EMPTY_BODY)
         }.consume { }
     }
@@ -88,7 +97,7 @@ class SeafHttpApi(
         dirOnly: Boolean = false,
     ): List<String> = request(token) {
         url(
-            repo(repoId).addPathSegment("fs-id-list")
+            endpoint(repoId, "fs-id-list")
                 .addQueryParameter("server-head", serverHead)
                 .apply { clientHead?.let { addQueryParameter("client-head", it) } }
                 .apply { if (dirOnly) addQueryParameter("dir-only", "1") }
@@ -103,13 +112,13 @@ class SeafHttpApi(
      */
     suspend fun packFs(token: String, repoId: String, ids: List<String>): List<ObjectPack.Entry> =
         request(token) {
-            url(repo(repoId).addPathSegment("pack-fs").build())
+            url(endpoint(repoId, "pack-fs").build())
             post(json(SeafJson.parser.encodeToString(ids)))
         }.consume { ObjectPack.read(it.byteStream()) }
 
     suspend fun sendFs(token: String, repoId: String, entries: List<ObjectPack.Entry>) {
         request(token) {
-            url(repo(repoId).addPathSegment("recv-fs").build())
+            url(endpoint(repoId, "recv-fs").build())
             post(ObjectPack.encode(entries).toRequestBody(OCTET_STREAM))
         }.consume { }
     }
@@ -125,10 +134,10 @@ class SeafHttpApi(
     private suspend fun checkObjects(
         token: String,
         repoId: String,
-        endpoint: String,
+        name: String,
         ids: List<String>,
     ): List<String> = request(token) {
-        url(repo(repoId).addPathSegment(endpoint).build())
+        url(endpoint(repoId, name).build())
         post(json(SeafJson.parser.encodeToString(ids)))
     }.consume { SeafJson.parser.decodeFromString(it.string()) }
 
@@ -156,12 +165,23 @@ class SeafHttpApi(
     /** Asks whether writing [delta] more bytes would exceed the quota. Throws OutOfQuota if so. */
     suspend fun quotaCheck(token: String, repoId: String, delta: Long) {
         request(token) {
-            url(repo(repoId).addPathSegment("quota-check").addQueryParameter("delta", delta.toString()).build())
+            url(endpoint(repoId, "quota-check").addQueryParameter("delta", delta.toString()).build())
         }.consume { }
     }
 
     private fun repo(repoId: String): HttpUrl.Builder =
         baseUrl.newBuilder().addPathSegments("seafhttp/repo/$repoId")
+
+    /**
+     * Builds a repo endpoint with a trailing slash.
+     *
+     * Not cosmetic: the fileserver answers 404 for these paths when the slash is missing and a
+     * query string follows, even though its route declares the slash as optional. Download
+     * happens to work without it because pack-fs takes no query parameters, which makes this an
+     * easy thing to get wrong in exactly one place and not notice.
+     */
+    private fun endpoint(repoId: String, name: String): HttpUrl.Builder =
+        repo(repoId).addPathSegment(name).addPathSegment("")
 
     private fun json(body: String): RequestBody = body.toRequestBody(SeafileApi.JSON)
 
@@ -177,12 +197,18 @@ class SeafHttpApi(
     }
 
     private inline fun <T> Response.consume(block: (okhttp3.ResponseBody) -> T): T = use {
-        val body = it.body ?: throw SeafileException.Unexpected(it.code, "empty body")
+        val body = it.body ?: throw SeafileException.Unexpected(it.code, describe(it))
         if (!it.isSuccessful) {
-            throw SeafileException.fromFileServer(it.code, body.string().take(ERROR_BODY_MAX))
+            // The fileserver answers some failures with an empty body, so the request itself has
+            // to be part of the message or the error says nothing about what went wrong.
+            val detail = body.string().take(ERROR_BODY_MAX).ifBlank { describe(it) }
+            throw SeafileException.fromFileServer(it.code, detail)
         }
         block(body)
     }
+
+    private fun describe(response: Response): String =
+        "${response.request.method} ${response.request.url.encodedPath}"
 
     private companion object {
         val OCTET_STREAM = "application/octet-stream".toMediaType()

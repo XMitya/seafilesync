@@ -98,7 +98,8 @@ data class CommitDto(
     val encrypted: String? = null,
     @SerialName("enc_version") val encVersion: Int? = null,
     val magic: String? = null,
-    @SerialName("random_key") val randomKey: String? = null,
+    /** The fileserver names this "key" on commits, unlike download-info which says "random_key". */
+    @SerialName("key") val randomKey: String? = null,
     val salt: String? = null,
     @SerialName("pwd_hash") val pwdHash: String? = null,
     @SerialName("pwd_hash_algo") val pwdHashAlgo: String? = null,

@@ -62,6 +62,8 @@ class AppContainer(private val applicationContext: Context) {
             fileIndex = database.fileIndex(),
             apiFor = ::seafileApi,
             seafHttpFor = ::seafHttpApi,
+            deviceName = DeviceIdentity.deviceName(),
+            clientVersion = appVersion,
         )
     }
 
