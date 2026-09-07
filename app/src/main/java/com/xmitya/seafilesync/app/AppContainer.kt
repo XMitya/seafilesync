@@ -27,10 +27,12 @@ class AppContainer(private val applicationContext: Context) {
 
     val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            // Blocks reach 4 MiB and the server does not honour Range, so an interrupted read
-            // costs a whole block. Timeouts are generous enough not to abandon a slow mobile
-            // connection that is still making progress.
-            .connectTimeout(30, TimeUnit.SECONDS)
+            // Kept short on purpose. A host with several A records where only some answer is
+            // common, and OkHttp only tries the next address once this expires, so a long
+            // connect timeout turns a working server into a two-minute hang.
+            .connectTimeout(10, TimeUnit.SECONDS)
+            // Reads and writes stay generous: blocks reach 4 MiB, the server does not honour
+            // Range, and abandoning a slow but progressing transfer costs the whole block.
             .readTimeout(5, TimeUnit.MINUTES)
             .writeTimeout(5, TimeUnit.MINUTES)
             .retryOnConnectionFailure(true)
@@ -45,8 +47,10 @@ class AppContainer(private val applicationContext: Context) {
 
     val deviceId: String by lazy { DeviceIdentity.deviceId(applicationContext) }
 
+    val appVersion: String = BuildConfig.VERSION_NAME
+
     /** Matches the shape the desktop daemon reports, so sessions are recognisable server-side. */
-    val userAgent: String = "Seafile/${BuildConfig.VERSION_NAME} (Android)"
+    val userAgent: String = "Seafile/$appVersion (Android)"
 
     fun seafileApi(serverUrl: String) = SeafileApi(serverUrl, httpClient)
 

@@ -1,3 +1,63 @@
 <resources>
     <string name="app_name">Seafile Sync</string>
+
+    <!-- Login -->
+    <string name="login_title">Connect a Seafile account</string>
+    <string name="login_server">Server address</string>
+    <string name="login_server_hint">seafile.example.com</string>
+    <string name="login_email">Email</string>
+    <string name="login_password">Password</string>
+    <string name="login_otp">Two-factor code</string>
+    <string name="login_submit">Sign in</string>
+    <string name="login_error_server_required">Enter the server address</string>
+    <string name="login_error_email_required">Enter your email</string>
+    <string name="login_error_password_required">Enter your password</string>
+
+    <!-- Sync folder -->
+    <string name="folder_title">Choose the sync folder</string>
+    <string name="folder_explanation">Each library you sync becomes a subfolder here.</string>
+    <string name="folder_select">Use this folder</string>
+    <string name="folder_new">New folder</string>
+    <string name="folder_up">Up one level</string>
+    <string name="folder_not_writable">This folder cannot be written to</string>
+    <plurals name="folder_child_count">
+        <item quantity="one">%1$d folder</item>
+        <item quantity="other">%1$d folders</item>
+    </plurals>
+
+    <!-- Permissions -->
+    <string name="permission_storage_title">Allow access to all files</string>
+    <string name="permission_storage_explanation">Syncing mirrors libraries into a folder you choose, so the app needs to read and write files outside its own storage.</string>
+    <string name="permission_storage_grant">Open settings</string>
+    <string name="permission_notifications_title">Allow notifications</string>
+    <string name="permission_notifications_explanation">Syncing runs in the background and shows its progress in a notification. Android stops background services that cannot post one.</string>
+    <string name="permission_notifications_grant">Allow</string>
+
+    <!-- Libraries -->
+    <string name="libraries_title">Libraries</string>
+    <string name="libraries_empty">This account has no libraries yet</string>
+    <string name="libraries_refresh">Refresh</string>
+    <string name="libraries_sign_out">Sign out</string>
+    <string name="libraries_encrypted_unsupported">Encrypted libraries are not supported yet</string>
+    <string name="libraries_read_only">Read-only</string>
+
+    <!-- Library actions (requirement 7) -->
+    <string name="library_action_sync">Sync this library</string>
+    <string name="library_action_stop">Stop syncing</string>
+    <string name="library_action_retry">Retry now</string>
+    <string name="library_action_dismiss">Cancel</string>
+    <string name="library_stop_confirm_title">Stop syncing %1$s?</string>
+    <string name="library_stop_confirm_message">Files already downloaded stay on this device. They just stop being kept up to date.</string>
+    <string name="library_stop_confirm_action">Stop</string>
+
+    <!-- Sync state descriptions, also read out by accessibility services -->
+    <string name="sync_state_not_synced">Not synced</string>
+    <string name="sync_state_synced">Synced</string>
+    <string name="sync_state_syncing">Syncing</string>
+    <string name="sync_state_paused">Sync paused</string>
+    <string name="sync_state_error">Sync failed</string>
+
+    <!-- Shared -->
+    <string name="dismiss">Dismiss</string>
+    <string name="retry">Retry</string>
 </resources>
