@@ -54,7 +54,7 @@ fun LibrariesScreen(
     onStopSyncing: (LibraryUi) -> Unit,
     onRetry: (LibraryUi) -> Unit,
     onRefresh: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
 ) {
@@ -78,8 +78,8 @@ fun LibrariesScreen(
                             contentDescription = stringResource(R.string.libraries_refresh),
                         )
                     }
-                    TextButton(onClick = onSignOut) {
-                        Text(stringResource(R.string.libraries_sign_out))
+                    TextButton(onClick = onOpenSettings) {
+                        Text(stringResource(R.string.libraries_settings))
                     }
                 },
             )

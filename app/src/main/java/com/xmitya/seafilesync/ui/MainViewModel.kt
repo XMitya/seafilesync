@@ -8,6 +8,7 @@ import com.xmitya.seafilesync.app.DeviceIdentity
 import com.xmitya.seafilesync.data.api.SeafileException
 import com.xmitya.seafilesync.data.db.SyncedRepoEntity
 import com.xmitya.seafilesync.data.prefs.Account
+import com.xmitya.seafilesync.data.prefs.SyncPreferences
 import com.xmitya.seafilesync.sync.SyncStatus
 import com.xmitya.seafilesync.ui.libraries.LibrariesUiState
 import com.xmitya.seafilesync.ui.libraries.LibraryUi
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -32,6 +35,8 @@ sealed interface Destination {
     data object ChooseSyncFolder : Destination
 
     data object Libraries : Destination
+
+    data object Settings : Destination
 }
 
 data class LoginUiState(
@@ -123,6 +128,31 @@ class MainViewModel(
 
     fun stopSyncing(library: LibraryUi) {
         viewModelScope.launch { container.syncEngine.disable(library.id) }
+    }
+
+    val settings: StateFlow<SyncPreferences> = container.settings.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncPreferences())
+
+    private val _account = MutableStateFlow<Account?>(null)
+    val account: StateFlow<Account?> = _account.asStateFlow()
+
+    fun openSettings() {
+        viewModelScope.launch {
+            _account.value = container.accountStore.current()
+            _destination.value = Destination.Settings
+        }
+    }
+
+    fun closeSettings() {
+        _destination.value = Destination.Libraries
+    }
+
+    fun setWifiOnly(value: Boolean) {
+        viewModelScope.launch { container.settings.setWifiOnly(value) }
+    }
+
+    fun setPollInterval(seconds: Long) {
+        viewModelScope.launch { container.settings.setPollInterval(seconds) }
     }
 
     fun onServerUrlChanged(value: String) = _login.update { it.copy(serverUrl = value, errorMessage = null) }

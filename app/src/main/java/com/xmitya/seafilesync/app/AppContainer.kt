@@ -12,6 +12,8 @@ import com.xmitya.seafilesync.data.api.UserAgentInterceptor
 import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.db.SyncDatabase
 import com.xmitya.seafilesync.data.prefs.KeystoreTokenCipher
+import com.xmitya.seafilesync.data.prefs.SyncSettings
+import com.xmitya.seafilesync.service.NetworkPolicy
 import com.xmitya.seafilesync.sync.SyncEngine
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -46,6 +48,10 @@ class AppContainer(private val applicationContext: Context) {
     val accountStore: AccountStore by lazy {
         AccountStore(applicationContext.accountDataStore, KeystoreTokenCipher())
     }
+
+    val settings: SyncSettings by lazy { SyncSettings(applicationContext.accountDataStore) }
+
+    val networkPolicy: NetworkPolicy by lazy { NetworkPolicy(applicationContext) }
 
     val deviceId: String by lazy { DeviceIdentity.deviceId(applicationContext) }
 

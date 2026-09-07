@@ -68,6 +68,17 @@
     <string name="battery_explanation">Android restricts apps it considers idle, and eventually stops running their background work at all. Excluding this app from battery optimisation is what keeps libraries syncing while it is closed.</string>
     <string name="battery_allow">Allow</string>
 
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_sync_folder">Sync folder</string>
+    <string name="settings_wifi_only">Only sync on unmetered connections</string>
+    <string name="settings_wifi_only_explanation">Pauses transfers on mobile data and on metered Wi-Fi.</string>
+    <string name="settings_poll_interval">Check the server every</string>
+    <string name="settings_poll_interval_explanation">This server has no push channel, so changes made elsewhere are noticed on this schedule. Shorter means faster, and more battery.</string>
+    <string name="back">Back</string>
+    <string name="libraries_settings">Settings</string>
+
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>
     <string name="retry">Retry</string>

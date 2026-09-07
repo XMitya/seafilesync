@@ -49,7 +49,7 @@ class LibrariesScreenTest {
                     onStopSyncing = onStopSyncing,
                     onRetry = onRetry,
                     onRefresh = {},
-                    onSignOut = {},
+                    onOpenSettings = {},
                 )
             }
         }

@@ -91,14 +91,17 @@ class SyncForegroundService : Service() {
                 stopSelf()
                 return
             }
-            runCatching {
-                val due = container.syncEngine.reposNeedingSync(account)
-                due.forEach { container.syncEngine.sync(account, it) }
-                // Watches are re-established after each pass: directories created by the sync
-                // itself are not covered by an inotify watch set up before they existed.
-                due.forEach { watcher?.watch(it.repoId, java.io.File(it.localPath)) }
+            val preferences = container.settings.current()
+            if (container.networkPolicy.current().allowsSync(preferences.wifiOnly)) {
+                runCatching {
+                    val due = container.syncEngine.reposNeedingSync(account)
+                    due.forEach { container.syncEngine.sync(account, it) }
+                    // Watches are re-established after each pass: directories created by the
+                    // sync itself are not covered by a watch set up before they existed.
+                    due.forEach { watcher?.watch(it.repoId, java.io.File(it.localPath)) }
+                }
             }
-            delay(POLL_INTERVAL_MILLIS)
+            delay(preferences.pollIntervalSeconds * 1000)
         }
     }
 
@@ -140,6 +143,7 @@ class SyncForegroundService : Service() {
     private suspend fun syncOne(repoId: String) {
         val container = appContainer
         val account = container.accountStore.current() ?: return
+        if (!container.networkPolicy.current().allowsSync(container.settings.current().wifiOnly)) return
         val repo = container.database.syncedRepos().byId(repoId) ?: return
         container.syncEngine.sync(account, repo)
     }
@@ -176,7 +180,6 @@ class SyncForegroundService : Service() {
          * changes are only noticed by asking. Thirty seconds is a compromise between latency and
          * battery; the resilience milestone makes it adaptive.
          */
-        private const val POLL_INTERVAL_MILLIS = 30_000L
         private const val NOTIFICATION_THROTTLE_MILLIS = 1_000L
         private const val RESTART_DELAY_MILLIS = 5_000L
         private const val TAG = "SeafileSync"

@@ -15,6 +15,7 @@ import com.xmitya.seafilesync.ui.libraries.LibrariesScreen
 import com.xmitya.seafilesync.ui.login.LoginScreen
 import com.xmitya.seafilesync.ui.permissions.AskForNotificationPermission
 import com.xmitya.seafilesync.ui.permissions.BatteryOptimizationBanner
+import com.xmitya.seafilesync.ui.settings.SettingsScreen
 import com.xmitya.seafilesync.ui.permissions.RequireAllFilesAccess
 
 @Composable
@@ -58,9 +59,25 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onStopSyncing = viewModel::stopSyncing,
                 onRetry = viewModel::startSyncing,
                 onRefresh = viewModel::refreshLibraries,
-                onSignOut = viewModel::signOut,
+                onOpenSettings = viewModel::openSettings,
                 modifier = modifier,
                 header = { BatteryOptimizationBanner() },
+            )
+        }
+
+        Destination.Settings -> {
+            val preferences by viewModel.settings.collectAsStateWithLifecycle()
+            val account by viewModel.account.collectAsStateWithLifecycle()
+            SettingsScreen(
+                preferences = preferences,
+                accountEmail = account?.email.orEmpty(),
+                serverUrl = account?.serverUrl.orEmpty(),
+                syncRoot = account?.syncRoot.orEmpty(),
+                onWifiOnlyChanged = viewModel::setWifiOnly,
+                onPollIntervalChanged = viewModel::setPollInterval,
+                onSignOut = viewModel::signOut,
+                onBack = viewModel::closeSettings,
+                modifier = modifier,
             )
         }
     }
