@@ -34,6 +34,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME goes into the User-Agent the server records per device.
+        buildConfig = true
     }
 
     testOptions {
@@ -76,6 +78,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.kotlin.test)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
