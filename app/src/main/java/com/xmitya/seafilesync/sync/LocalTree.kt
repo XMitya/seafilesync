@@ -6,6 +6,7 @@ import com.xmitya.seafilesync.data.fs.SeafDir
 import com.xmitya.seafilesync.data.fs.SeafDirent
 import com.xmitya.seafilesync.data.fs.SeafFile
 import com.xmitya.seafilesync.data.crypto.LibraryCipher
+import com.xmitya.seafilesync.data.fs.CdcChunker
 import java.io.File
 
 /**
@@ -68,7 +69,7 @@ data class LocalTree(
  * correct on the wire; it only gives up dedup against blocks the desktop client cut differently.
  * Rabin chunking is a later optimisation, not a correctness requirement.
  */
-class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
+class LocalTreeBuilder(private val chunker: CdcChunker = CdcChunker()) {
 
     fun build(
         root: File,
@@ -144,25 +145,17 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
         val blockList = mutableListOf<LocalBlock>()
         val size = file.length()
 
-        file.inputStream().buffered().use { stream ->
-            var offset = 0L
-            val buffer = ByteArray(blockSize)
-            while (offset < size) {
-                var read = 0
-                while (read < blockSize) {
-                    val n = stream.read(buffer, read, blockSize - read)
-                    if (n < 0) break
-                    read += n
-                }
-                if (read == 0) break
-                val plaintext = if (read == blockSize) buffer.copyOf() else buffer.copyOf(read)
+        file.inputStream().use { stream ->
+            chunker.chunk(stream) { chunk, data ->
+                // Boundaries come from the plaintext, so an encrypted library still deduplicates
+                // the way an unencrypted one does; only the stored bytes differ.
+                val plaintext = data.copyOf(chunk.length)
                 // The id must be the hash of what the server will store, so for an encrypted
                 // library it is the hash of the ciphertext, not of the file's own bytes.
                 val stored = cipher?.encrypt(plaintext) ?: plaintext
-                val block = LocalBlock(ObjectId.ofBytes(stored), file, offset, read, cipher)
+                val block = LocalBlock(ObjectId.ofBytes(stored), file, chunk.offset, chunk.length, cipher)
                 blockList += block
                 blocks[block.id] = block
-                offset += read
             }
         }
 
@@ -180,9 +173,6 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
     }
 
     companion object {
-        /** Matches what the only other third-party block-protocol client uses. */
-        const val DEFAULT_BLOCK_SIZE = 8 * 1024 * 1024
-
         /**
          * Never uploaded regardless of the library's own rules: platform droppings, editor
          * scratch files, this app's partial downloads, and the ignore file itself.

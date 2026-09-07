@@ -20,10 +20,12 @@ contents change is never re-uploaded and deletions and renames are never propaga
   official app posts the password to the server and receives plaintext, which means the server
   can read the library.
 
+- Content-defined chunking, so an edit only re-uploads the blocks around it rather than
+  everything after it. Boundaries match the desktop client's, which means blocks it already
+  uploaded are reused rather than duplicated.
+
 ## What it does not do yet
 
-- Content-defined chunking. Blocks are fixed-size, which is correct on the wire but does not
-  deduplicate against blocks the desktop client cut differently.
 - More than one account.
 
 ## Building
@@ -100,4 +102,9 @@ server's source and confirmed against a running server.
   that id is special-cased -- and an empty library is what a user has just after creating one.
 - Encrypted libraries hash the ciphertext, not the file: a block id is the SHA-1 of what is
   stored. So encryption happens before hashing on the way out and verification before decryption
-  on the way in.
+  on the way in. Chunk boundaries still come from the plaintext, so encrypted libraries
+  deduplicate as well as plain ones do.
+- The chunking fingerprint is carried as a 32-bit value while its table arithmetic is 64-bit, so
+  rolling the window and computing it outright give different answers. That is load-bearing: the
+  chunker seeds each block with the direct computation and rolls from there, and "fixing" the
+  discrepancy moves every boundary.
