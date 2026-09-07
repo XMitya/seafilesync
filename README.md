@@ -15,7 +15,6 @@ contents change is never re-uploaded and deletions and renames are never propaga
 - Conflicts keep both versions, using the same naming Seafile itself uses
 - Runs in a foreground service with a notification showing what is transferring
 - Survives being killed, Doze, and reboots
-
 - Encrypted libraries, decrypted on the device. The password is verified locally against the
   magic the server publishes and never sent anywhere, so the server stores only ciphertext. The
   official app posts the password to the server and receives plaintext, which means the server
