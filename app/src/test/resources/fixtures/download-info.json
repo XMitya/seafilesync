@@ -1,0 +1,22 @@
+{
+  "relay_id": "44e8f253849ad910dc142247227c8ece8ec0f971",
+  "relay_addr": "127.0.0.1",
+  "relay_port": "80",
+  "email": "65b78c6ba9894a9c9952663c7d11811f@auth.local",
+  "token": "1111111111111111111111111111111111111111",
+  "repo_id": "79dc614e-d7f4-47a5-8bcc-10400a0a08cb",
+  "repo_name": "My Library",
+  "repo_desc": "My Library",
+  "repo_size": 300544,
+  "repo_size_formatted": "293.5\u00a0KB",
+  "mtime": 1788697628,
+  "mtime_relative": "<time datetime=\"2026-09-06T12:27:08\" is=\"relative-time\" title=\"Sun, 06 Sep 2026 12:27:08 +0000\" >1 day ago</time>",
+  "encrypted": "",
+  "enc_version": 0,
+  "salt": "",
+  "magic": "",
+  "random_key": "",
+  "repo_version": 1,
+  "head_commit_id": "b2be155598a7ef094045f343939daa410b3ff03f",
+  "permission": "rw"
+}
