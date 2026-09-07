@@ -63,6 +63,11 @@
     <string name="notification_idle">All libraries are up to date</string>
     <string name="notification_syncing">Syncing %1$s — %2$s</string>
 
+    <!-- Battery -->
+    <string name="battery_title">Keep syncing in the background</string>
+    <string name="battery_explanation">Android restricts apps it considers idle, and eventually stops running their background work at all. Excluding this app from battery optimisation is what keeps libraries syncing while it is closed.</string>
+    <string name="battery_allow">Allow</string>
+
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>
     <string name="retry">Retry</string>

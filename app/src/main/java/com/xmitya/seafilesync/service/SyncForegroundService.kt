@@ -1,10 +1,16 @@
 package com.xmitya.seafilesync.service
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.IBinder
+import android.os.PowerManager
+import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.sync.LocalChangeWatcher
@@ -33,6 +39,8 @@ class SyncForegroundService : Service() {
     private lateinit var notifications: SyncNotifications
     private var syncLoop: Job? = null
     private var watcher: LocalChangeWatcher? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +61,13 @@ class SyncForegroundService : Service() {
         if (syncLoop == null) {
             syncLoop = scope.launch { runSyncLoop() }
             watcher = LocalChangeWatcher(scope) { repoId -> syncOne(repoId) }
+            // Locks are held only while bytes are actually moving. Holding them for the whole
+            // life of the service would keep the CPU and radio awake through every idle poll.
+            scope.launch {
+                appContainer.syncEngine.status.collect { status ->
+                    if (status.isTransferring) acquireLocks() else releaseLocks()
+                }
+            }
             scope.launch {
                 appContainer.syncEngine.status.collectLatest { status ->
                     notifications.update(status)
@@ -87,6 +102,40 @@ class SyncForegroundService : Service() {
         }
     }
 
+    /**
+     * Android 15 and later cap a dataSync foreground service at roughly six hours a day, and
+     * when the budget runs out the system calls this and expects the service to stop. Failing to
+     * do so kills the process with ForegroundServiceDidNotStopInTimeException.
+     *
+     * Stopping is not the end of syncing: state lives in the database, so the watchdog restarts
+     * the service once the budget resets, which it does whenever the app is in the foreground.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.i(TAG, "Foreground service budget exhausted; stopping and leaving it to the watchdog")
+        SyncWatchdogWorker.schedule(this)
+        stopSelf(startId)
+    }
+
+    /**
+     * Swiping the app away from Recents stops the service on many builds even though it is a
+     * foreground service, so it is scheduled to come back. An inexact alarm is deliberate: this
+     * is not time-critical and an exact one would need a permission users have to grant.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restart = PendingIntent.getForegroundService(
+            this,
+            0,
+            Intent(this, SyncForegroundService::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        getSystemService(AlarmManager::class.java).set(
+            AlarmManager.ELAPSED_REALTIME,
+            SystemClock.elapsedRealtime() + RESTART_DELAY_MILLIS,
+            restart,
+        )
+        super.onTaskRemoved(rootIntent)
+    }
+
     /** Runs a single library out of turn, after a local edit was noticed. */
     private suspend fun syncOne(repoId: String) {
         val container = appContainer
@@ -97,7 +146,25 @@ class SyncForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun acquireLocks() {
+        if (wakeLock?.isHeld == true) return
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:transfer")
+            .apply { setReferenceCounted(false); acquire(WAKE_LOCK_TIMEOUT_MILLIS) }
+        wifiLock = getSystemService(WifiManager::class.java)
+            .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$TAG:transfer")
+            .apply { setReferenceCounted(false); acquire() }
+    }
+
+    private fun releaseLocks() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
+        wifiLock?.takeIf { it.isHeld }?.release()
+        wifiLock = null
+    }
+
     override fun onDestroy() {
+        releaseLocks()
         watcher?.stopAll()
         scope.cancel()
         super.onDestroy()
@@ -111,6 +178,14 @@ class SyncForegroundService : Service() {
          */
         private const val POLL_INTERVAL_MILLIS = 30_000L
         private const val NOTIFICATION_THROTTLE_MILLIS = 1_000L
+        private const val RESTART_DELAY_MILLIS = 5_000L
+        private const val TAG = "SeafileSync"
+
+        /**
+         * A timeout on the wake lock so a bug in the sync loop cannot drain the battery
+         * indefinitely; a transfer that legitimately runs longer re-acquires it.
+         */
+        private const val WAKE_LOCK_TIMEOUT_MILLIS = 10 * 60 * 1000L
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, SyncForegroundService::class.java))

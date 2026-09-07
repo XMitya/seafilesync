@@ -56,6 +56,7 @@ fun LibrariesScreen(
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    header: @Composable () -> Unit = {},
 ) {
     var selected by remember { mutableStateOf<LibraryUi?>(null) }
     var confirmingStopFor by remember { mutableStateOf<LibraryUi?>(null) }
@@ -98,6 +99,7 @@ fun LibrariesScreen(
                     )
 
                 else -> LazyColumn(Modifier.fillMaxSize()) {
+                    item { header() }
                     items(state.libraries, key = { it.id }) { library ->
                         LibraryRow(library, onClick = { selected = library })
                         HorizontalDivider()

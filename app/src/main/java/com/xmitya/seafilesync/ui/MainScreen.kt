@@ -14,6 +14,7 @@ import com.xmitya.seafilesync.ui.folder.SyncFolderScreen
 import com.xmitya.seafilesync.ui.libraries.LibrariesScreen
 import com.xmitya.seafilesync.ui.login.LoginScreen
 import com.xmitya.seafilesync.ui.permissions.AskForNotificationPermission
+import com.xmitya.seafilesync.ui.permissions.BatteryOptimizationBanner
 import com.xmitya.seafilesync.ui.permissions.RequireAllFilesAccess
 
 @Composable
@@ -59,6 +60,7 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onRefresh = viewModel::refreshLibraries,
                 onSignOut = viewModel::signOut,
                 modifier = modifier,
+                header = { BatteryOptimizationBanner() },
             )
         }
     }
