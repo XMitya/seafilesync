@@ -42,7 +42,14 @@ class SyncPlannerTest {
         remote: RemoteSnapshot,
         index: List<FileIndexEntity> = emptyList(),
         local: Map<String, LocalState> = emptyMap(),
-    ) = SyncPlanner.plan(remote, index) { local[it] ?: LocalState.Missing }
+        identical: Set<String> = emptySet(),
+    ) = SyncPlanner.plan(
+        remote = remote,
+        index = index,
+        modifier = "test@example.com",
+        nowMillis = 1_700_000_000_000,
+        contentMatches = { path, _ -> path in identical },
+    ) { local[it] ?: LocalState.Missing }
 
     @Test
     fun `a new remote file is downloaded`() {
@@ -71,7 +78,7 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun `a file the app never wrote is never overwritten`() {
+    fun `a file the app never wrote is kept alongside the server copy`() {
         // The user dropped a file into the sync folder that happens to share a name with one on
         // the server. Overwriting it would destroy their copy without warning.
         val result = plan(
@@ -80,21 +87,40 @@ class SyncPlannerTest {
             local = mapOf("/notes.txt" to LocalState.Modified),
         )
 
-        assertTrue(result.operations.none { it is SyncOperation.DownloadFile })
-        val conflict = result.operations.filterIsInstance<SyncOperation.ConflictSkipped>().single()
+        val conflict = result.operations.filterIsInstance<SyncOperation.ResolveConflict>().single()
         assertEquals("/notes.txt", conflict.path)
+        assertTrue(conflict.keepLocalAs.contains("(SFConflict test@example.com "))
     }
 
     @Test
-    fun `a file changed on both sides is reported rather than overwritten`() {
+    fun `an untracked local file with identical content is adopted, not duplicated`() {
+        // The state after a reinstall, or after re-adding a library to a folder that already
+        // holds it. Treating every file as a conflict there would duplicate the whole library.
+        val result = plan(
+            snapshot(remoteFile("/a.txt", "a".repeat(40))),
+            index = emptyList(),
+            local = mapOf("/a.txt" to LocalState.Modified),
+            identical = setOf("/a.txt"),
+        )
+
+        assertEquals(1, result.operations.filterIsInstance<SyncOperation.AdoptLocal>().size)
+        assertTrue(result.operations.none { it is SyncOperation.ResolveConflict })
+        assertEquals(0L, result.bytesToDownload)
+    }
+
+    @Test
+    fun `a file changed on both sides keeps both versions`() {
         val result = plan(
             snapshot(remoteFile("/a.txt", "b".repeat(40))),
             index = listOf(indexed("/a.txt", "a".repeat(40))),
             local = mapOf("/a.txt" to LocalState.Modified),
         )
 
-        assertTrue(result.operations.none { it is SyncOperation.DownloadFile })
-        assertEquals(1, result.operations.filterIsInstance<SyncOperation.ConflictSkipped>().size)
+        // The server version takes the path, matching what the server does on a merge, and the
+        // local edit survives under a conflict name rather than being discarded.
+        val conflict = result.operations.filterIsInstance<SyncOperation.ResolveConflict>().single()
+        assertEquals("/a.txt", conflict.path)
+        assertEquals("b".repeat(40), conflict.remote.fileId)
     }
 
     @Test

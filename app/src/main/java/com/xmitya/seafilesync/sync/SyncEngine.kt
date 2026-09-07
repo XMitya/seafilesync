@@ -176,7 +176,13 @@ class SyncEngine(
         val index = fileIndex.forRepo(repo.repoId)
         val recorded = index.associateBy { it.path }
 
-        val plan = SyncPlanner.plan(snapshot, index) { path ->
+        val plan = SyncPlanner.plan(
+            remote = snapshot,
+            index = index,
+            modifier = account.email,
+            nowMillis = clock(),
+            contentMatches = { path, file -> hasSameContent(File(root, path.trimStart('/')), file) },
+        ) { path ->
             localStateOf(File(root, path.trimStart('/')), recorded[path])
         }
 
@@ -191,6 +197,8 @@ class SyncEngine(
             )
         }
 
+        guardAgainstMassDeletion(plan, index.size, root)
+
         var downloaded = 0
         val skipped = mutableListOf<String>()
 
@@ -204,18 +212,7 @@ class SyncEngine(
                     session.downloader.download(token, repo.repoId, operation.remote, target) { bytes ->
                         updateProgress(repo.repoId) { it.copy(transferredBytes = it.transferredBytes + bytes) }
                     }
-                    fileIndex.upsert(
-                        FileIndexEntity(
-                            repoId = repo.repoId,
-                            path = operation.path,
-                            fileId = operation.remote.fileId,
-                            sizeBytes = operation.remote.sizeBytes,
-                            serverModifiedSeconds = operation.remote.modifiedSeconds,
-                            localSizeBytes = target.length(),
-                            localModifiedMillis = target.lastModified(),
-                            blockIds = operation.remote.blockIds,
-                        )
-                    )
+                    fileIndex.upsert(indexEntry(repo.repoId, operation.path, operation.remote, target))
                     downloaded++
                     updateProgress(repo.repoId) { it.copy(filesRemaining = (it.filesRemaining - 1).coerceAtLeast(0)) }
                 }
@@ -223,6 +220,29 @@ class SyncEngine(
                 is SyncOperation.DeleteFile -> {
                     File(root, operation.path.trimStart('/')).delete()
                     fileIndex.delete(repo.repoId, operation.path)
+                }
+
+                is SyncOperation.ResolveConflict -> {
+                    val target = File(root, operation.path.trimStart('/'))
+                    val kept = File(root, operation.keepLocalAs.trimStart('/'))
+                    // Move the local edit aside first. If the download then fails, the user still
+                    // has their version under the conflict name rather than nothing at all.
+                    if (target.exists() && !target.renameTo(kept)) {
+                        skipped += "${operation.path}: could not set the local copy aside"
+                        continue
+                    }
+                    updateProgress(repo.repoId) { it.copy(currentPath = operation.path) }
+                    session.downloader.download(token, repo.repoId, operation.remote, target) { bytes ->
+                        updateProgress(repo.repoId) { it.copy(transferredBytes = it.transferredBytes + bytes) }
+                    }
+                    fileIndex.upsert(indexEntry(repo.repoId, operation.path, operation.remote, target))
+                    downloaded++
+                    skipped += "${operation.path}: kept your version as ${kept.name}"
+                }
+
+                is SyncOperation.AdoptLocal -> {
+                    val target = File(root, operation.path.trimStart('/'))
+                    fileIndex.upsert(indexEntry(repo.repoId, operation.path, operation.remote, target))
                 }
 
                 is SyncOperation.ConflictSkipped -> skipped += "${operation.path}: ${operation.reason}"
@@ -304,6 +324,47 @@ class SyncEngine(
         return head
     }
 
+    /**
+     * Refuses to act on a plan that would wipe out most of a library.
+     *
+     * The dangerous case is not a user deleting files, it is the sync directory becoming
+     * unreadable -- an unmounted SD card, a revoked permission, a path that now resolves
+     * somewhere empty. Every file then looks locally deleted, and propagating that would delete
+     * the library on the server for every other device too.
+     */
+    private fun guardAgainstMassDeletion(plan: SyncPlan, indexedCount: Int, root: File) {
+        if (indexedCount < MASS_DELETE_FLOOR) return
+        val deletions = plan.operations.count { it is SyncOperation.DeleteFile }
+        if (deletions < indexedCount * MASS_DELETE_FRACTION) return
+        if (!root.isDirectory) {
+            throw IOException("Sync folder ${root.path} is not readable; refusing to delete $deletions files")
+        }
+    }
+
+    /**
+     * Whether the file on disk is byte-for-byte the server's version.
+     *
+     * Size is checked first because it rules out almost everything for free; only a size match
+     * justifies hashing the file. The hash is the same computation the server used to name the
+     * object, so equality here is exact rather than probabilistic.
+     */
+    private fun hasSameContent(file: File, remote: RemoteFile): Boolean {
+        if (!file.isFile || file.length() != remote.sizeBytes) return false
+        return runCatching { treeBuilder.fileId(file) == remote.fileId }.getOrDefault(false)
+    }
+
+    private fun indexEntry(repoId: String, path: String, remote: RemoteFile, onDisk: File) =
+        FileIndexEntity(
+            repoId = repoId,
+            path = path,
+            fileId = remote.fileId,
+            sizeBytes = remote.sizeBytes,
+            serverModifiedSeconds = remote.modifiedSeconds,
+            localSizeBytes = onDisk.length(),
+            localModifiedMillis = onDisk.lastModified(),
+            blockIds = remote.blockIds,
+        )
+
     private suspend fun syncToken(session: Session, account: Account, repoId: String): String {
         val info = session.api.downloadInfo(account.token, repoId)
         repos.updateToken(repoId, info.token)
@@ -319,6 +380,10 @@ class SyncEngine(
 
     private companion object {
         const val TAG = "SeafileSync"
+
+        /** Below this many tracked files the fraction check is noise rather than signal. */
+        const val MASS_DELETE_FLOOR = 10
+        const val MASS_DELETE_FRACTION = 0.5
     }
 
     /**

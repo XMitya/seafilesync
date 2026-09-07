@@ -14,9 +14,22 @@ sealed interface SyncOperation {
     data class DeleteFile(override val path: String) : SyncOperation
 
     /**
-     * The server changed a file the user also changed locally. Download-only sync refuses to
-     * overwrite, so the file is skipped and reported; two-way sync resolves it properly.
+     * Both sides changed the same file. The server's version takes the path and the local one is
+     * moved aside under a conflict name, so neither edit is lost and the user can see both.
      */
+    data class ResolveConflict(
+        override val path: String,
+        val remote: RemoteFile,
+        val keepLocalAs: String,
+    ) : SyncOperation
+
+    /**
+     * The local file already holds exactly the server's content, so nothing transfers; it just
+     * needs recording in the index as synced.
+     */
+    data class AdoptLocal(override val path: String, val remote: RemoteFile) : SyncOperation
+
+    /** Something that cannot be resolved automatically and is reported instead. */
     data class ConflictSkipped(override val path: String, val reason: String) : SyncOperation
 }
 
@@ -43,6 +56,14 @@ object SyncPlanner {
     fun plan(
         remote: RemoteSnapshot,
         index: List<FileIndexEntity>,
+        /** Used to name conflict copies; matches what the server writes for merges. */
+        modifier: String = "",
+        nowMillis: Long = System.currentTimeMillis(),
+        /**
+         * Whether the file on disk already holds exactly the server's content. Checked only when
+         * there is no index entry to go by, because it costs a hash of the file.
+         */
+        contentMatches: (path: String, remote: RemoteFile) -> Boolean = { _, _ -> false },
         localState: (path: String) -> LocalState,
     ): SyncPlan {
         val indexed = index.associateBy { it.path }
@@ -62,11 +83,19 @@ object SyncPlanner {
                     bytes += file.sizeBytes
                 }
 
-                // A file appeared locally that this app never wrote. Overwriting it would
-                // destroy data the user put there.
-                recorded == null -> operations += SyncOperation.ConflictSkipped(
-                    path, "exists locally but was never synced"
-                )
+                // A file exists locally with no record of this app having written it. That is
+                // the normal state after a reinstall, or when a library is re-added to a folder
+                // that already holds it, so identical content is adopted rather than duplicated.
+                // Only genuinely different content is a conflict.
+                recorded == null && contentMatches(path, file) ->
+                    operations += SyncOperation.AdoptLocal(path, file)
+
+                recorded == null -> {
+                    operations += SyncOperation.ResolveConflict(
+                        path, file, ConflictNaming.conflictPath(path, modifier, nowMillis),
+                    )
+                    bytes += file.sizeBytes
+                }
 
                 // Already at the server's version and untouched since.
                 recorded.fileId == file.fileId && local == LocalState.Unchanged -> Unit
@@ -77,10 +106,15 @@ object SyncPlanner {
                     bytes += file.sizeBytes
                 }
 
-                // Changed on both sides. Download-only cannot merge, so the local edit wins by
-                // being left alone and the divergence is surfaced.
-                local == LocalState.Modified && recorded.fileId != file.fileId ->
-                    operations += SyncOperation.ConflictSkipped(path, "changed locally and on the server")
+                // Changed on both sides. The server's version takes the path, matching what the
+                // server itself does when it merges commits, and the local edit is preserved
+                // beside it rather than discarded.
+                local == LocalState.Modified && recorded.fileId != file.fileId -> {
+                    operations += SyncOperation.ResolveConflict(
+                        path, file, ConflictNaming.conflictPath(path, modifier, nowMillis),
+                    )
+                    bytes += file.sizeBytes
+                }
 
                 // Changed locally only: nothing to download, the upload side will deal with it.
                 local == LocalState.Modified -> Unit
@@ -100,8 +134,10 @@ object SyncPlanner {
             when (localState(recorded.path)) {
                 LocalState.Unchanged -> operations += SyncOperation.DeleteFile(recorded.path)
                 LocalState.Missing -> operations += SyncOperation.DeleteFile(recorded.path)
+                // Deleted remotely but edited locally. The edit is kept and the upload pass will
+                // put it back on the server, which is the safer of the two possible surprises.
                 LocalState.Modified -> operations += SyncOperation.ConflictSkipped(
-                    recorded.path, "deleted on the server but changed locally"
+                    recorded.path, "deleted on the server but changed locally, keeping the local copy"
                 )
             }
         }

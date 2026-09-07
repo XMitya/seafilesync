@@ -54,16 +54,13 @@ data class LocalTree(
  * correct on the wire; it only gives up dedup against blocks the desktop client cut differently.
  * Rabin chunking is a later optimisation, not a correctness requirement.
  */
-class LocalTreeBuilder(
-    private val blockSize: Int = DEFAULT_BLOCK_SIZE,
-    private val ignore: (File) -> Boolean = ::isIgnored,
-) {
+class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
 
-    fun build(root: File, modifier: String): LocalTree {
+    fun build(root: File, modifier: String, rules: IgnoreRules = IgnoreRules.load(root)): LocalTree {
         val objects = mutableMapOf<String, FsObject>()
         val files = mutableMapOf<String, LocalFileEntry>()
         val blocks = mutableMapOf<String, LocalBlock>()
-        val rootId = buildDirectory(root, "", modifier, objects, files, blocks)
+        val rootId = buildDirectory(root, "", modifier, rules, objects, files, blocks)
         return LocalTree(rootId, objects, files, blocks)
     }
 
@@ -71,6 +68,7 @@ class LocalTreeBuilder(
         directory: File,
         prefix: String,
         modifier: String,
+        rules: IgnoreRules,
         objects: MutableMap<String, FsObject>,
         files: MutableMap<String, LocalFileEntry>,
         blocks: MutableMap<String, LocalBlock>,
@@ -78,11 +76,11 @@ class LocalTreeBuilder(
         val entries = mutableListOf<SeafDirent>()
 
         for (child in directory.listFiles().orEmpty().sortedBy { it.name }) {
-            if (ignore(child)) continue
             val path = "$prefix/${child.name}"
+            if (isAlwaysIgnored(child) || rules.isIgnored(path, child.isDirectory)) continue
 
             if (child.isDirectory) {
-                val id = buildDirectory(child, path, modifier, objects, files, blocks)
+                val id = buildDirectory(child, path, modifier, rules, objects, files, blocks)
                 entries += SeafDirent.directory(
                     id = id,
                     name = child.name,
@@ -108,6 +106,13 @@ class LocalTreeBuilder(
         objects[id] = dir
         return id
     }
+
+    /**
+     * The content id of a single file, without walking or allocating the rest of the tree. Used
+     * to answer "is this already the server's copy?" before deciding a file is in conflict.
+     */
+    fun fileId(file: File): String =
+        buildFile(file, "/${file.name}", mutableMapOf(), mutableMapOf()).fileId
 
     private fun buildFile(
         file: File,
@@ -155,16 +160,18 @@ class LocalTreeBuilder(
         const val DEFAULT_BLOCK_SIZE = 8 * 1024 * 1024
 
         /**
-         * Things that should never reach the server: platform droppings, editor scratch files,
-         * and this app's own partial downloads.
+         * Never uploaded regardless of the library's own rules: platform droppings, editor
+         * scratch files, this app's partial downloads, and the ignore file itself.
+         *
+         * Partial downloads matter most. Uploading one would publish a half-written file under a
+         * hidden name and then keep it forever.
          */
-        fun isIgnored(file: File): Boolean {
+        fun isAlwaysIgnored(file: File): Boolean {
             val name = file.name
             return name == ".DS_Store" ||
                 name == "Thumbs.db" ||
-                name == "seafile-ignore.txt" ||
+                name == IgnoreRules.FILE_NAME ||
                 name.endsWith(".seafile-part") ||
-                name.endsWith(".tmp") ||
                 name.startsWith(".~") ||
                 name.startsWith("~$")
         }
