@@ -24,7 +24,20 @@ data class SyncedRepoEntity(
     val errorMessage: String? = null,
     val isWritable: Boolean = true,
     val lastSyncedAtMillis: Long = 0,
+    /** 0 for a plain library. */
+    val encVersion: Int = 0,
+    /** Wrapped library key, as published by the server. Useless without the password. */
+    val randomKey: String = "",
+    /** Per-library salt, present from enc_version 3 on. */
+    val encSalt: String = "",
+    /**
+     * The library password, encrypted with the same Keystore key as the account token. Kept
+     * because syncing runs unattended: a background service cannot prompt for it.
+     */
+    val encryptedPassword: String? = null,
 ) {
+    val isEncrypted: Boolean get() = encVersion > 0
+
     companion object {
         const val STATUS_IDLE = "idle"
         const val STATUS_SYNCING = "syncing"

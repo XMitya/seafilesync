@@ -45,8 +45,10 @@ class AppContainer(private val applicationContext: Context) {
             .build()
     }
 
+    private val tokenCipher: KeystoreTokenCipher by lazy { KeystoreTokenCipher() }
+
     val accountStore: AccountStore by lazy {
-        AccountStore(applicationContext.accountDataStore, KeystoreTokenCipher())
+        AccountStore(applicationContext.accountDataStore, tokenCipher)
     }
 
     val settings: SyncSettings by lazy { SyncSettings(applicationContext.accountDataStore) }
@@ -68,6 +70,7 @@ class AppContainer(private val applicationContext: Context) {
             fileIndex = database.fileIndex(),
             apiFor = ::seafileApi,
             seafHttpFor = ::seafHttpApi,
+            cipher = tokenCipher,
             deviceName = DeviceIdentity.deviceName(),
             clientVersion = appVersion,
         )

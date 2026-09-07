@@ -5,6 +5,7 @@ import com.xmitya.seafilesync.data.fs.ObjectId
 import com.xmitya.seafilesync.data.fs.SeafDir
 import com.xmitya.seafilesync.data.fs.SeafDirent
 import com.xmitya.seafilesync.data.fs.SeafFile
+import com.xmitya.seafilesync.data.crypto.LibraryCipher
 import java.io.File
 
 /**
@@ -12,9 +13,22 @@ import java.io.File
  * library can hold thousands, so they are described by where they live and read only when the
  * server says it is missing that one.
  */
-data class LocalBlock(val id: String, val file: File, val offset: Long, val length: Int) {
+data class LocalBlock(
+    val id: String,
+    val file: File,
+    val offset: Long,
+    val length: Int,
+    /**
+     * Set for encrypted libraries. The block is re-encrypted on read rather than kept around:
+     * blocks reach 8 MiB and a library holds thousands, so holding ciphertext in memory for the
+     * whole tree is not an option, and AES on this path is hardware-accelerated.
+     */
+    private val cipher: LibraryCipher? = null,
+) {
 
-    fun read(): ByteArray = file.inputStream().use { stream ->
+    fun read(): ByteArray = readPlaintext().let { cipher?.encrypt(it) ?: it }
+
+    private fun readPlaintext(): ByteArray = file.inputStream().use { stream ->
         stream.skip(offset)
         val buffer = ByteArray(length)
         var read = 0
@@ -56,11 +70,16 @@ data class LocalTree(
  */
 class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
 
-    fun build(root: File, modifier: String, rules: IgnoreRules = IgnoreRules.load(root)): LocalTree {
+    fun build(
+        root: File,
+        modifier: String,
+        rules: IgnoreRules = IgnoreRules.load(root),
+        cipher: LibraryCipher? = null,
+    ): LocalTree {
         val objects = mutableMapOf<String, FsObject>()
         val files = mutableMapOf<String, LocalFileEntry>()
         val blocks = mutableMapOf<String, LocalBlock>()
-        val rootId = buildDirectory(root, "", modifier, rules, objects, files, blocks)
+        val rootId = buildDirectory(root, "", modifier, rules, cipher, objects, files, blocks)
         return LocalTree(rootId, objects, files, blocks)
     }
 
@@ -69,6 +88,7 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
         prefix: String,
         modifier: String,
         rules: IgnoreRules,
+        cipher: LibraryCipher?,
         objects: MutableMap<String, FsObject>,
         files: MutableMap<String, LocalFileEntry>,
         blocks: MutableMap<String, LocalBlock>,
@@ -80,14 +100,14 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
             if (isAlwaysIgnored(child) || rules.isIgnored(path, child.isDirectory)) continue
 
             if (child.isDirectory) {
-                val id = buildDirectory(child, path, modifier, rules, objects, files, blocks)
+                val id = buildDirectory(child, path, modifier, rules, cipher, objects, files, blocks)
                 entries += SeafDirent.directory(
                     id = id,
                     name = child.name,
                     mtime = child.lastModified() / 1000,
                 )
             } else {
-                val entry = buildFile(child, path, objects, blocks)
+                val entry = buildFile(child, path, cipher, objects, blocks)
                 files[path] = entry
                 entries += SeafDirent.file(
                     id = entry.fileId,
@@ -111,12 +131,13 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
      * The content id of a single file, without walking or allocating the rest of the tree. Used
      * to answer "is this already the server's copy?" before deciding a file is in conflict.
      */
-    fun fileId(file: File): String =
-        buildFile(file, "/${file.name}", mutableMapOf(), mutableMapOf()).fileId
+    fun fileId(file: File, cipher: LibraryCipher? = null): String =
+        buildFile(file, "/${file.name}", cipher, mutableMapOf(), mutableMapOf()).fileId
 
     private fun buildFile(
         file: File,
         path: String,
+        cipher: LibraryCipher?,
         objects: MutableMap<String, FsObject>,
         blocks: MutableMap<String, LocalBlock>,
     ): LocalFileEntry {
@@ -134,8 +155,11 @@ class LocalTreeBuilder(private val blockSize: Int = DEFAULT_BLOCK_SIZE) {
                     read += n
                 }
                 if (read == 0) break
-                val bytes = if (read == blockSize) buffer.copyOf() else buffer.copyOf(read)
-                val block = LocalBlock(ObjectId.ofBytes(bytes), file, offset, read)
+                val plaintext = if (read == blockSize) buffer.copyOf() else buffer.copyOf(read)
+                // The id must be the hash of what the server will store, so for an encrypted
+                // library it is the hash of the ciphertext, not of the file's own bytes.
+                val stored = cipher?.encrypt(plaintext) ?: plaintext
+                val block = LocalBlock(ObjectId.ofBytes(stored), file, offset, read, cipher)
                 blockList += block
                 blocks[block.id] = block
                 offset += read

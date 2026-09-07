@@ -1,6 +1,7 @@
 package com.xmitya.seafilesync.sync
 
 import com.xmitya.seafilesync.data.api.SeafHttpApi
+import com.xmitya.seafilesync.data.crypto.LibraryCipher
 import com.xmitya.seafilesync.data.fs.ObjectId
 import java.io.File
 import java.io.IOException
@@ -28,6 +29,8 @@ class Downloader(private val api: SeafHttpApi) {
         repoId: String,
         remote: RemoteFile,
         target: File,
+        /** Set for encrypted libraries; blocks arrive as ciphertext and are decrypted here. */
+        cipher: LibraryCipher? = null,
         progress: ProgressSink = ProgressSink { },
     ) {
         target.parentFile?.mkdirs()
@@ -38,18 +41,21 @@ class Downloader(private val api: SeafHttpApi) {
         try {
             temporary.outputStream().buffered().use { out ->
                 for (blockId in remote.blockIds) {
-                    val bytes = api.downloadBlock(token, repoId, blockId) { it.readBytes() }
-                    val actual = ObjectId.ofBytes(bytes)
+                    val stored = api.downloadBlock(token, repoId, blockId) { it.readBytes() }
+                    // The id is the hash of what the server stores, so integrity is checked
+                    // against the ciphertext, before any attempt to decrypt it.
+                    val actual = ObjectId.ofBytes(stored)
                     if (actual != blockId) {
                         throw IOException(
                             "Block $blockId for ${remote.path} hashed to $actual; transfer was corrupted"
                         )
                     }
-                    out.write(bytes)
-                    progress.onBytes(bytes.size.toLong())
+                    progress.onBytes(stored.size.toLong())
+                    out.write(cipher?.decrypt(stored) ?: stored)
                 }
             }
 
+            // The recorded size is of the plaintext, which is what has just been written.
             if (temporary.length() != remote.sizeBytes) {
                 throw IOException(
                     "Reassembled ${remote.path} is ${temporary.length()} bytes, expected ${remote.sizeBytes}"

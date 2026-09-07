@@ -54,6 +54,9 @@ interface SyncedRepoDao {
     @Query("UPDATE synced_repo SET syncToken = :token WHERE repoId = :repoId")
     suspend fun updateToken(repoId: String, token: String)
 
+    @Query("UPDATE synced_repo SET encryptedPassword = NULL WHERE repoId = :repoId")
+    suspend fun forgetPassword(repoId: String)
+
     @Query("DELETE FROM synced_repo WHERE repoId = :repoId")
     suspend fun delete(repoId: String)
 

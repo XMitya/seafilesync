@@ -54,14 +54,15 @@ data class DownloadInfoDto(
     val permission: String = "r",
     @SerialName("repo_version") val repoVersion: Int = 1,
     @SerialName("head_commit_id") val headCommitId: String? = null,
-    /** Empty string when the library is not encrypted; the server does not use a boolean here. */
-    val encrypted: String = "",
+    /** Encoded as "" or as 1 depending on the value, hence the lenient reader. */
+    @Serializable(with = LenientBooleanSerializer::class)
+    val encrypted: Boolean = false,
     @SerialName("enc_version") val encVersion: Int = 0,
     val magic: String = "",
     @SerialName("random_key") val randomKey: String = "",
     val salt: String = "",
 ) {
-    val isEncrypted: Boolean get() = encrypted.isNotEmpty()
+    val isEncrypted: Boolean get() = encrypted
     val isWritable: Boolean get() = permission == "rw"
 }
 

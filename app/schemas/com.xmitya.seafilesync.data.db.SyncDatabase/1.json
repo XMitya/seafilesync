@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "835f90451eb3feb36ef1055c630720da",
+    "identityHash": "b2898b9c16cad15d93cb134bd19f0d00",
     "entities": [
       {
         "tableName": "synced_repo",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repoId` TEXT NOT NULL, `name` TEXT NOT NULL, `localPath` TEXT NOT NULL, `lastSyncedCommitId` TEXT, `syncToken` TEXT, `status` TEXT NOT NULL, `errorMessage` TEXT, `isWritable` INTEGER NOT NULL, `lastSyncedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`repoId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repoId` TEXT NOT NULL, `name` TEXT NOT NULL, `localPath` TEXT NOT NULL, `lastSyncedCommitId` TEXT, `syncToken` TEXT, `status` TEXT NOT NULL, `errorMessage` TEXT, `isWritable` INTEGER NOT NULL, `lastSyncedAtMillis` INTEGER NOT NULL, `encVersion` INTEGER NOT NULL, `randomKey` TEXT NOT NULL, `encSalt` TEXT NOT NULL, `encryptedPassword` TEXT, PRIMARY KEY(`repoId`))",
         "fields": [
           {
             "fieldPath": "repoId",
@@ -58,6 +58,29 @@
             "columnName": "lastSyncedAtMillis",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "encVersion",
+            "columnName": "encVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "randomKey",
+            "columnName": "randomKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encSalt",
+            "columnName": "encSalt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encryptedPassword",
+            "columnName": "encryptedPassword",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -191,7 +214,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '835f90451eb3feb36ef1055c630720da')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b2898b9c16cad15d93cb134bd19f0d00')"
     ]
   }
 }

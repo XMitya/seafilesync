@@ -38,7 +38,10 @@
     <string name="libraries_empty">This account has no libraries yet</string>
     <string name="libraries_refresh">Refresh</string>
     <string name="libraries_sign_out">Sign out</string>
-    <string name="libraries_encrypted_unsupported">Encrypted libraries are not supported yet</string>
+    <string name="libraries_encrypted">Encrypted</string>
+    <string name="library_password_title">Password for %1$s</string>
+    <string name="library_password_confirm">Unlock and sync</string>
+    <string name="library_password_explanation">This library is encrypted. The password is checked on this device and never sent to the server, which is what keeps the server unable to read the library.</string>
     <string name="libraries_read_only">Read-only</string>
 
     <!-- Library actions (requirement 7) -->

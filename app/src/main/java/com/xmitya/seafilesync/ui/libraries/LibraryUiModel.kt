@@ -40,14 +40,10 @@ data class LibraryUi(
     /** Where the library is mirrored, once syncing has been enabled. */
     val localPath: String? = null,
 ) {
-    /**
-     * Encrypted libraries are listed but cannot be synced yet: doing it properly means decrypting
-     * client-side, and doing it the way the official app does would mean handing the password to
-     * the server.
-     */
-    val isSupported: Boolean get() = !isEncrypted
+    /** Encrypted libraries need a password before anything can be transferred. */
+    val needsPassword: Boolean get() = isEncrypted && state == SyncState.NotSynced
 
-    val canSync: Boolean get() = isSupported && state == SyncState.NotSynced
+    val canSync: Boolean get() = state == SyncState.NotSynced
 
     val canStopSyncing: Boolean get() = state != SyncState.NotSynced
 

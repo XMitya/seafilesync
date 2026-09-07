@@ -5,8 +5,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.xmitya.seafilesync.ui.theme.SeafileSyncTheme
 import org.junit.Assert.assertEquals
@@ -37,7 +39,7 @@ class LibrariesScreenTest {
 
     private fun show(
         vararg libraries: LibraryUi,
-        onSync: (LibraryUi) -> Unit = {},
+        onSync: (LibraryUi, String?) -> Unit = { _, _ -> },
         onStopSyncing: (LibraryUi) -> Unit = {},
         onRetry: (LibraryUi) -> Unit = {},
     ) {
@@ -133,14 +135,32 @@ class LibrariesScreenTest {
     }
 
     @Test
-    fun encrypted_libraries_are_listed_but_cannot_be_synced() {
-        show(library(name = "Secrets", encrypted = true))
-
-        compose.onNodeWithText("Secrets").assertIsDisplayed()
-        compose.onNodeWithText("Encrypted libraries are not supported yet").assertIsDisplayed()
+    fun an_encrypted_library_asks_for_its_password_before_syncing() {
+        var syncedWith: String? = null
+        show(library(name = "Secrets", encrypted = true), onSync = { _, password -> syncedWith = password })
 
         compose.onAllNodesWithTag(LIBRARY_ROW_TAG)[0].performClick()
+        compose.onNodeWithText("Sync this library").performClick()
 
-        assertEquals(0, compose.onAllNodesWithTag(LIBRARY_ACTIONS_TAG).fetchSemanticsNodes().size)
+        // Syncing must not start before the password exists: without it there is no key, and
+        // uploading would write plaintext into a library the user chose to encrypt.
+        assertEquals(null, syncedWith)
+        compose.onNodeWithText("Password for Secrets").assertIsDisplayed()
+
+        compose.onNodeWithTag(LIBRARY_PASSWORD_TAG).performTextInput("hunter2")
+        compose.onNodeWithText("Unlock and sync").performClick()
+
+        assertEquals("hunter2", syncedWith)
+    }
+
+    @Test
+    fun a_plain_library_syncs_without_asking_for_anything() {
+        var asked = false
+        show(library(), onSync = { _, password -> asked = password == null })
+
+        compose.onAllNodesWithTag(LIBRARY_ROW_TAG)[0].performClick()
+        compose.onNodeWithText("Sync this library").performClick()
+
+        assertEquals(true, asked)
     }
 }

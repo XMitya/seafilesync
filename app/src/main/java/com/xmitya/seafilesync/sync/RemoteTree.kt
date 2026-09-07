@@ -2,6 +2,7 @@ package com.xmitya.seafilesync.sync
 
 import com.xmitya.seafilesync.data.api.ObjectPack
 import com.xmitya.seafilesync.data.api.SeafHttpApi
+import com.xmitya.seafilesync.data.fs.EMPTY_OBJECT_ID
 import com.xmitya.seafilesync.data.fs.FsObject
 import com.xmitya.seafilesync.data.fs.SeafDir
 import com.xmitya.seafilesync.data.fs.SeafFile
@@ -37,11 +38,21 @@ class RemoteTreeReader(private val api: SeafHttpApi, private val batchSize: Int 
         val directories = mutableSetOf<String>()
         val objects = mutableMapOf<String, FsObject>()
 
+        // A freshly created library has an all-zero root: the id that means "empty directory"
+        // rather than an object that exists. Asking pack-fs for it answers 500, so an empty
+        // library would fail to sync at all -- and an empty library is exactly what a user has
+        // just after creating one.
+        if (rootId == EMPTY_OBJECT_ID) {
+            return RemoteSnapshot(commitId, rootId, emptyMap(), setOf("/"))
+        }
+
         // Breadth-first so each level can be fetched in one batch rather than one object at a
         // time, which matters on trees that are wide rather than deep.
         var frontier = listOf(rootId to "")
         while (frontier.isNotEmpty()) {
-            val needed = frontier.map { it.first }.filterNot { objects.containsKey(it) }.distinct()
+            val needed = frontier.map { it.first }
+                .filterNot { it == EMPTY_OBJECT_ID || objects.containsKey(it) }
+                .distinct()
             fetch(token, repoId, needed).forEach { (id, obj) -> objects[id] = obj }
 
             val next = mutableListOf<Pair<String, String>>()
@@ -51,7 +62,9 @@ class RemoteTreeReader(private val api: SeafHttpApi, private val batchSize: Int 
                 for (entry in dir.entries) {
                     val path = "$prefix/${entry.name}"
                     if (entry.isDirectory) {
-                        next += entry.id to path
+                        // An empty subdirectory carries the same all-zero id; it still needs
+                        // creating on disk, but there is no object to fetch for it.
+                        if (entry.id == EMPTY_OBJECT_ID) directories += path else next += entry.id to path
                     } else {
                         val file = objects[entry.id] as? SeafFile
                         files[path] = RemoteFile(
@@ -68,7 +81,8 @@ class RemoteTreeReader(private val api: SeafHttpApi, private val batchSize: Int 
 
             // File objects are only needed for their block lists, so they are fetched after the
             // directory level that referenced them rather than as part of the walk.
-            val missingBlocks = files.values.filter { it.blockIds.isEmpty() && it.sizeBytes > 0 }
+            val missingBlocks = files.values
+                .filter { it.blockIds.isEmpty() && it.sizeBytes > 0 && it.fileId != EMPTY_OBJECT_ID }
             if (missingBlocks.isNotEmpty()) {
                 fetch(token, repoId, missingBlocks.map { it.fileId }.distinct()).forEach { (id, obj) ->
                     val seafFile = obj as? SeafFile ?: return@forEach

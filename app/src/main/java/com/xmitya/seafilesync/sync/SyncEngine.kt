@@ -6,7 +6,11 @@ import com.xmitya.seafilesync.data.db.FileIndexDao
 import com.xmitya.seafilesync.data.db.FileIndexEntity
 import com.xmitya.seafilesync.data.db.SyncedRepoDao
 import com.xmitya.seafilesync.data.db.SyncedRepoEntity
+import com.xmitya.seafilesync.data.crypto.LibraryCipher
+import com.xmitya.seafilesync.data.crypto.LibraryCrypto
+import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
 import com.xmitya.seafilesync.data.prefs.Account
+import com.xmitya.seafilesync.data.prefs.TokenCipher
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +58,8 @@ class SyncEngine(
      */
     private val apiFor: (serverUrl: String) -> SeafileApi,
     private val seafHttpFor: (serverUrl: String) -> SeafHttpApi,
+    /** Protects the stored library password; the same Keystore key as the account token. */
+    private val cipher: TokenCipher,
     private val deviceName: String = "Android",
     private val clientVersion: String = "1.0",
     private val treeBuilder: LocalTreeBuilder = LocalTreeBuilder(),
@@ -79,17 +85,53 @@ class SyncEngine(
      * Registers a library for syncing. The directory is created eagerly so the user can see the
      * result immediately even before anything transfers.
      */
-    suspend fun enable(account: Account, repoId: String, name: String, isWritable: Boolean) {
+    suspend fun enable(
+        account: Account,
+        repoId: String,
+        name: String,
+        isWritable: Boolean,
+        /** Required for an encrypted library; verified against the server's magic before storing. */
+        password: String? = null,
+    ) {
         val localPath = File(account.syncRoot, name).path
         File(localPath).mkdirs()
+
+        val info = apiFor(account.serverUrl).downloadInfo(account.token, repoId)
+        if (info.isEncrypted) {
+            val given = password ?: throw WrongLibraryPasswordException()
+            // Checked locally against the magic the server already published, so the password
+            // itself never leaves the device.
+            if (!LibraryCrypto.verifyPassword(repoId, given, info.encVersion, info.salt, info.magic)) {
+                throw WrongLibraryPasswordException()
+            }
+        }
+
         repos.upsert(
             SyncedRepoEntity(
                 repoId = repoId,
                 name = name,
                 localPath = localPath,
                 isWritable = isWritable,
+                syncToken = info.token,
+                encVersion = if (info.isEncrypted) info.encVersion else 0,
+                randomKey = info.randomKey,
+                encSalt = info.salt,
+                encryptedPassword = password?.takeIf { info.isEncrypted }?.let(cipher::encrypt),
             )
         )
+    }
+
+    /**
+     * Builds the block cipher for a library, or null when it is not encrypted.
+     *
+     * A missing or unreadable stored password is a hard failure rather than a silent skip:
+     * carrying on would upload plaintext into a library the user chose to encrypt.
+     */
+    private fun cipherFor(repo: SyncedRepoEntity): LibraryCipher? {
+        if (!repo.isEncrypted) return null
+        val password = repo.encryptedPassword?.let { runCatching { cipher.decrypt(it) }.getOrNull() }
+            ?: throw WrongLibraryPasswordException()
+        return LibraryCipher.forLibrary(password, repo.randomKey, repo.encVersion, repo.encSalt)
     }
 
     /**
@@ -176,12 +218,14 @@ class SyncEngine(
         val index = fileIndex.forRepo(repo.repoId)
         val recorded = index.associateBy { it.path }
 
+        val libraryCipher = cipherFor(repo)
+
         val plan = SyncPlanner.plan(
             remote = snapshot,
             index = index,
             modifier = account.email,
             nowMillis = clock(),
-            contentMatches = { path, file -> hasSameContent(File(root, path.trimStart('/')), file) },
+            contentMatches = { path, file -> hasSameContent(File(root, path.trimStart('/')), file, libraryCipher) },
         ) { path ->
             localStateOf(File(root, path.trimStart('/')), recorded[path])
         }
@@ -209,7 +253,7 @@ class SyncEngine(
                 is SyncOperation.DownloadFile -> {
                     val target = File(root, operation.path.trimStart('/'))
                     updateProgress(repo.repoId) { it.copy(currentPath = operation.path) }
-                    session.downloader.download(token, repo.repoId, operation.remote, target) { bytes ->
+                    session.downloader.download(token, repo.repoId, operation.remote, target, libraryCipher) { bytes ->
                         updateProgress(repo.repoId) { it.copy(transferredBytes = it.transferredBytes + bytes) }
                     }
                     fileIndex.upsert(indexEntry(repo.repoId, operation.path, operation.remote, target))
@@ -232,7 +276,7 @@ class SyncEngine(
                         continue
                     }
                     updateProgress(repo.repoId) { it.copy(currentPath = operation.path) }
-                    session.downloader.download(token, repo.repoId, operation.remote, target) { bytes ->
+                    session.downloader.download(token, repo.repoId, operation.remote, target, libraryCipher) { bytes ->
                         updateProgress(repo.repoId) { it.copy(transferredBytes = it.transferredBytes + bytes) }
                     }
                     fileIndex.upsert(indexEntry(repo.repoId, operation.path, operation.remote, target))
@@ -277,7 +321,7 @@ class SyncEngine(
     ): String? {
         if (!repo.isWritable) return null
 
-        val tree = treeBuilder.build(root, account.email)
+        val tree = treeBuilder.build(root, account.email, cipher = cipherFor(repo))
         if (tree.rootId == remoteRootId) return null
 
         val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
@@ -348,9 +392,9 @@ class SyncEngine(
      * justifies hashing the file. The hash is the same computation the server used to name the
      * object, so equality here is exact rather than probabilistic.
      */
-    private fun hasSameContent(file: File, remote: RemoteFile): Boolean {
+    private fun hasSameContent(file: File, remote: RemoteFile, cipher: LibraryCipher?): Boolean {
         if (!file.isFile || file.length() != remote.sizeBytes) return false
-        return runCatching { treeBuilder.fileId(file) == remote.fileId }.getOrDefault(false)
+        return runCatching { treeBuilder.fileId(file, cipher) == remote.fileId }.getOrDefault(false)
     }
 
     private fun indexEntry(repoId: String, path: String, remote: RemoteFile, onDisk: File) =

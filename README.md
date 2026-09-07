@@ -16,11 +16,13 @@ contents change is never re-uploaded and deletions and renames are never propaga
 - Runs in a foreground service with a notification showing what is transferring
 - Survives being killed, Doze, and reboots
 
+- Encrypted libraries, decrypted on the device. The password is verified locally against the
+  magic the server publishes and never sent anywhere, so the server stores only ciphertext. The
+  official app posts the password to the server and receives plaintext, which means the server
+  can read the library.
+
 ## What it does not do yet
 
-- **Encrypted libraries.** They are listed but cannot be synced. Doing this properly means
-  decrypting on the device; doing it the way the official app does would mean sending the library
-  password to the server, which defeats the point of encrypting it.
 - Content-defined chunking. Blocks are fixed-size, which is correct on the wire but does not
   deduplicate against blocks the desktop client cut differently.
 - More than one account.
@@ -92,3 +94,11 @@ server's source and confirmed against a running server.
   resulting head may differ from the one that was published and has to be read back.
 - Commit objects require `creator` to be exactly 40 characters, including the all-zero id a client
   writes, so a serialiser that omits default values silently produces rejected commits.
+- `download-info` returns `"encrypted": ""` for a plain library and `"encrypted": 1` for an
+  encrypted one: an empty string in one case, an integer in the other, from the same field.
+- A newly created library has an all-zero root id, meaning "empty directory" rather than a stored
+  object. Asking `pack-fs` for it answers 500, so an empty library fails to sync at all unless
+  that id is special-cased -- and an empty library is what a user has just after creating one.
+- Encrypted libraries hash the ciphertext, not the file: a block id is the SHA-1 of what is
+  stored. So encryption happens before hashing on the way out and verification before decryption
+  on the way in.

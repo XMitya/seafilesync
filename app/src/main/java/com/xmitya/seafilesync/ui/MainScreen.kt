@@ -57,9 +57,10 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 state = state,
                 onSync = viewModel::startSyncing,
                 onStopSyncing = viewModel::stopSyncing,
-                onRetry = viewModel::startSyncing,
+                onRetry = { viewModel.startSyncing(it) },
                 onRefresh = viewModel::refreshLibraries,
                 onOpenSettings = viewModel::openSettings,
+                onDismissError = viewModel::dismissError,
                 modifier = modifier,
                 header = { BatteryOptimizationBanner() },
             )

@@ -1,5 +1,6 @@
 package com.xmitya.seafilesync.ui.libraries
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -35,12 +37,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.xmitya.seafilesync.R
 
 const val LIBRARY_ROW_TAG = "library-row"
 const val LIBRARY_ACTIONS_TAG = "library-actions"
+const val LIBRARY_PASSWORD_TAG = "library-password"
+const val LIBRARIES_ERROR_TAG = "libraries-error"
 
 /**
  * The main screen: every library on the account, each with its sync status, and a sheet of
@@ -50,16 +55,18 @@ const val LIBRARY_ACTIONS_TAG = "library-actions"
 @Composable
 fun LibrariesScreen(
     state: LibrariesUiState,
-    onSync: (LibraryUi) -> Unit,
+    onSync: (LibraryUi, password: String?) -> Unit,
     onStopSyncing: (LibraryUi) -> Unit,
     onRetry: (LibraryUi) -> Unit,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
+    onDismissError: () -> Unit = {},
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
 ) {
     var selected by remember { mutableStateOf<LibraryUi?>(null) }
     var confirmingStopFor by remember { mutableStateOf<LibraryUi?>(null) }
+    var askingPasswordFor by remember { mutableStateOf<LibraryUi?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -85,7 +92,29 @@ fun LibrariesScreen(
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // Failures that belong to the screen rather than to one library -- a refresh that
+            // could not reach the server, a rejected library password -- used to be recorded and
+            // never shown, which made them indistinguishable from nothing happening.
+            state.errorMessage?.let { message ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f).testTag(LIBRARIES_ERROR_TAG),
+                    )
+                    TextButton(onClick = onDismissError) { Text(stringResource(R.string.dismiss)) }
+                }
+            }
+
+            Box(Modifier.fillMaxSize()) {
             when {
                 state.isRefreshing && state.libraries.isEmpty() ->
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -106,6 +135,7 @@ fun LibrariesScreen(
                     }
                 }
             }
+            }
         }
     }
 
@@ -117,12 +147,25 @@ fun LibrariesScreen(
         ) {
             LibraryActions(
                 library = library,
-                onSync = { selected = null; onSync(library) },
+                onSync = {
+                    selected = null
+                    // An encrypted library cannot start syncing without its password, and the
+                    // password is checked on the device rather than sent to the server.
+                    if (library.needsPassword) askingPasswordFor = library else onSync(library, null)
+                },
                 // Stopping is the one action that can look destructive, so it is confirmed.
                 onStopSyncing = { selected = null; confirmingStopFor = library },
                 onRetry = { selected = null; onRetry(library) },
             )
         }
+    }
+
+    askingPasswordFor?.let { library ->
+        LibraryPasswordDialog(
+            libraryName = library.name,
+            onDismiss = { askingPasswordFor = null },
+            onConfirm = { password -> askingPasswordFor = null; onSync(library, password) },
+        )
     }
 
     confirmingStopFor?.let { library ->
@@ -170,7 +213,7 @@ private fun LibraryRow(library: LibraryUi, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .testTag(LIBRARY_ROW_TAG)
-            .clickable(enabled = library.isSupported, onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -207,10 +250,48 @@ private fun LibraryRow(library: LibraryUi, onClick: () -> Unit) {
 }
 
 @Composable
+private fun LibraryPasswordDialog(
+    libraryName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_password_title, libraryName)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.library_password_explanation),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth().testTag(LIBRARY_PASSWORD_TAG),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(password) }, enabled = password.isNotBlank()) {
+                // Deliberately not the same label as the sheet action it came from: two live
+                // buttons with identical text are ambiguous to read and to drive in tests.
+                Text(stringResource(R.string.library_password_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_action_dismiss)) }
+        },
+    )
+}
+
+@Composable
 private fun librarySubtitle(library: LibraryUi): String = when {
-    !library.isSupported -> stringResource(R.string.libraries_encrypted_unsupported)
     library.state == SyncState.Error -> library.errorMessage ?: stringResource(R.string.sync_state_error)
     library.localPath != null -> library.localPath
+    library.isEncrypted -> stringResource(R.string.libraries_encrypted)
     !library.isWritable -> stringResource(R.string.libraries_read_only)
     else -> formatSize(library.sizeBytes)
 }

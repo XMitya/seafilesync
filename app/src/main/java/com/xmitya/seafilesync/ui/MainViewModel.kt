@@ -1,5 +1,6 @@
 package com.xmitya.seafilesync.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -49,6 +50,8 @@ data class LoginUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
 )
+
+private const val TAG = "SeafileSync"
 
 class MainViewModel(
     private val container: AppContainer,
@@ -118,13 +121,21 @@ class MainViewModel(
         }
     }
 
-    fun startSyncing(library: LibraryUi) {
+    fun startSyncing(library: LibraryUi, password: String? = null) {
         viewModelScope.launch {
             val account = container.accountStore.current() ?: return@launch
-            container.syncEngine.enable(account, library.id, library.name, library.isWritable)
-            onSyncingStarted()
+            try {
+                Log.i(TAG, "Enabling ${library.name}, password supplied: ${password != null}")
+                container.syncEngine.enable(account, library.id, library.name, library.isWritable, password)
+                onSyncingStarted()
+            } catch (failure: Exception) {
+                Log.w(TAG, "Could not enable ${library.name}", failure)
+                _libraries.update { it.copy(errorMessage = failure.message ?: "Could not start syncing") }
+            }
         }
     }
+
+    fun dismissError() = _libraries.update { it.copy(errorMessage = null) }
 
     fun stopSyncing(library: LibraryUi) {
         viewModelScope.launch { container.syncEngine.disable(library.id) }
