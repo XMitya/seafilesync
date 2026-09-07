@@ -10,7 +10,6 @@ import android.net.wifi.WifiManager
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
-import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.sync.LocalChangeWatcher
@@ -60,7 +59,7 @@ class SyncForegroundService : Service() {
 
         if (syncLoop == null) {
             syncLoop = scope.launch { runSyncLoop() }
-            watcher = LocalChangeWatcher(scope) { repoId -> syncOne(repoId) }
+            watcher = LocalChangeWatcher(scope, appContainer.log) { repoId -> syncOne(repoId) }
             // Locks are held only while bytes are actually moving. Holding them for the whole
             // life of the service would keep the CPU and radio awake through every idle poll.
             scope.launch {
@@ -114,7 +113,7 @@ class SyncForegroundService : Service() {
      * the service once the budget resets, which it does whenever the app is in the foreground.
      */
     override fun onTimeout(startId: Int, fgsType: Int) {
-        Log.i(TAG, "Foreground service budget exhausted; stopping and leaving it to the watchdog")
+        appContainer.log.info("Foreground service budget exhausted; stopping, watchdog will restart it")
         SyncWatchdogWorker.schedule(this)
         stopSelf(startId)
     }
@@ -153,10 +152,10 @@ class SyncForegroundService : Service() {
     private fun acquireLocks() {
         if (wakeLock?.isHeld == true) return
         wakeLock = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:transfer")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$LOCK_TAG:transfer")
             .apply { setReferenceCounted(false); acquire(WAKE_LOCK_TIMEOUT_MILLIS) }
         wifiLock = getSystemService(WifiManager::class.java)
-            .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$TAG:transfer")
+            .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$LOCK_TAG:transfer")
             .apply { setReferenceCounted(false); acquire() }
     }
 
@@ -182,7 +181,9 @@ class SyncForegroundService : Service() {
          */
         private const val NOTIFICATION_THROTTLE_MILLIS = 1_000L
         private const val RESTART_DELAY_MILLIS = 5_000L
-        private const val TAG = "SeafileSync"
+
+        /** Shows up in battery attribution, so it names the app rather than the class. */
+        private const val LOCK_TAG = "SeafileSync"
 
         /**
          * A timeout on the wake lock so a bug in the sync loop cannot drain the battery

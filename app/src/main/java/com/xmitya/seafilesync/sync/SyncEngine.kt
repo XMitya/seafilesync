@@ -1,5 +1,6 @@
 package com.xmitya.seafilesync.sync
 
+import com.xmitya.seafilesync.app.SyncLog
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
 import com.xmitya.seafilesync.data.db.FileIndexDao
@@ -11,7 +12,13 @@ import com.xmitya.seafilesync.data.crypto.LibraryCrypto
 import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
 import com.xmitya.seafilesync.data.prefs.Account
 import com.xmitya.seafilesync.data.prefs.TokenCipher
-import android.util.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 /** What the UI and the notification both render. */
 data class RepoProgress(
@@ -60,6 +68,7 @@ class SyncEngine(
     private val seafHttpFor: (serverUrl: String) -> SeafHttpApi,
     /** Protects the stored library password; the same Keystore key as the account token. */
     private val cipher: TokenCipher,
+    private val log: SyncLog,
     private val deviceName: String = "Android",
     private val clientVersion: String = "1.0",
     private val treeBuilder: LocalTreeBuilder = LocalTreeBuilder(),
@@ -80,6 +89,14 @@ class SyncEngine(
 
     /** One library at a time: parallel syncs would fight over bandwidth and confuse progress. */
     private val lock = Mutex()
+
+    /**
+     * The sync currently running for each library, so it can be stopped.
+     *
+     * Without this, switching a library off removed its row from the database while the transfer
+     * carried on writing files into a folder the user had just unsynced.
+     */
+    private val running = ConcurrentHashMap<String, Job>()
 
     /**
      * Registers a library for syncing. The directory is created eagerly so the user can see the
@@ -139,6 +156,7 @@ class SyncEngine(
      * the user switched syncing off would be a surprise.
      */
     suspend fun disable(repoId: String) {
+        running.remove(repoId)?.cancelAndJoin()
         repos.delete(repoId)
         fileIndex.deleteForRepo(repoId)
         _status.update { it.copy(activeRepos = it.activeRepos - repoId) }
@@ -173,20 +191,33 @@ class SyncEngine(
         data class UpToDate(val repoId: String) : SyncOutcome
         data class Synced(val repoId: String, val commitId: String, val downloaded: Int) : SyncOutcome
         data class Failed(val repoId: String, val reason: String) : SyncOutcome
+
+        /** The user switched this library off while it was transferring. */
+        data class Stopped(val repoId: String) : SyncOutcome
     }
 
     suspend fun sync(account: Account, repo: SyncedRepoEntity): SyncOutcome = lock.withLock {
-        try {
+        // Run as a child job rather than inline, so stopping this library cancels the transfer
+        // without also cancelling whatever called us -- the service's sync loop, usually.
+        val work = CoroutineScope(currentCoroutineContext()).async {
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_SYNCING)
-            val outcome = runSync(sessionFor(account), account, repo)
-            _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
-            outcome
+            runSync(sessionFor(account), account, repo)
+        }
+        running[repo.repoId] = work
+
+        try {
+            work.await()
+        } catch (stopped: CancellationException) {
+            log.info("Sync of ${repo.name} was stopped")
+            SyncOutcome.Stopped(repo.repoId)
         } catch (failure: IOException) {
             val reason = failure.message ?: failure::class.simpleName.orEmpty()
-            Log.w(TAG, "Sync of ${repo.name} failed", failure)
+            log.warn("Sync of ${repo.name} failed", failure)
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_ERROR, reason)
-            _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
             SyncOutcome.Failed(repo.repoId, reason)
+        } finally {
+            running.remove(repo.repoId)
+            _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
         }
     }
 
@@ -247,6 +278,10 @@ class SyncEngine(
         val skipped = mutableListOf<String>()
 
         for (operation in plan.operations) {
+            // Checked between operations so stopping a library takes effect within a block
+            // rather than at the end of the whole plan.
+            currentCoroutineContext().ensureActive()
+
             when (operation) {
                 is SyncOperation.CreateDirectory -> File(root, operation.path.trimStart('/')).mkdirs()
 
@@ -423,8 +458,6 @@ class SyncEngine(
     }
 
     private companion object {
-        const val TAG = "SeafileSync"
-
         /** Below this many tracked files the fraction check is noise rather than signal. */
         const val MASS_DELETE_FLOOR = 10
         const val MASS_DELETE_FRACTION = 0.5

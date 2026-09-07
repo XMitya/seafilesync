@@ -82,6 +82,14 @@
     <string name="back">Back</string>
     <string name="libraries_settings">Settings</string>
 
+    <!-- Diagnostics -->
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="settings_log_share">Share the log</string>
+    <string name="settings_log_clear">Clear the log</string>
+    <string name="settings_log_empty">Nothing logged yet</string>
+    <string name="settings_log_size">%1$s of log</string>
+    <string name="settings_log_share_title">Seafile Sync log</string>
+
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>
     <string name="retry">Retry</string>

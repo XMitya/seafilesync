@@ -16,6 +16,7 @@ import com.xmitya.seafilesync.data.prefs.SyncSettings
 import com.xmitya.seafilesync.service.NetworkPolicy
 import com.xmitya.seafilesync.sync.SyncEngine
 import okhttp3.OkHttpClient
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 private val Context.accountDataStore: DataStore<Preferences> by preferencesDataStore(name = "account")
@@ -48,7 +49,9 @@ class AppContainer(private val applicationContext: Context) {
     private val tokenCipher: KeystoreTokenCipher by lazy { KeystoreTokenCipher() }
 
     val accountStore: AccountStore by lazy {
-        AccountStore(applicationContext.accountDataStore, tokenCipher)
+        AccountStore(applicationContext.accountDataStore, tokenCipher) { failure ->
+            log.warn("Stored token could not be decrypted; the account will look absent", failure)
+        }
     }
 
     val settings: SyncSettings by lazy { SyncSettings(applicationContext.accountDataStore) }
@@ -56,6 +59,9 @@ class AppContainer(private val applicationContext: Context) {
     val networkPolicy: NetworkPolicy by lazy { NetworkPolicy(applicationContext) }
 
     val deviceId: String by lazy { DeviceIdentity.deviceId(applicationContext) }
+
+    /** Kept out of logcat's ring buffer, because the failures worth reading happen unattended. */
+    val log: SyncLog by lazy { SyncLog(File(applicationContext.filesDir, "logs")) }
 
     val appVersion: String = BuildConfig.VERSION_NAME
 
@@ -71,6 +77,7 @@ class AppContainer(private val applicationContext: Context) {
             apiFor = ::seafileApi,
             seafHttpFor = ::seafHttpApi,
             cipher = tokenCipher,
+            log = log,
             deviceName = DeviceIdentity.deviceName(),
             clientVersion = appVersion,
         )
@@ -78,5 +85,7 @@ class AppContainer(private val applicationContext: Context) {
 
     fun seafileApi(serverUrl: String) = SeafileApi(serverUrl, httpClient)
 
-    fun seafHttpApi(serverUrl: String) = SeafHttpApi(serverUrl, httpClient)
+    fun seafHttpApi(serverUrl: String) = SeafHttpApi(serverUrl, httpClient) { body ->
+        log.warn("Server rejected commit: $body")
+    }
 }

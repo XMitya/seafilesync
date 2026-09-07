@@ -69,12 +69,10 @@ class SeafileApi(
             .apply { otp?.let { header("X-Seafile-OTP", it) } }
             .build()
 
-        return withContext(io) {
-            client.newCall(request).execute().use { response ->
-                val text = response.body?.string().orEmpty()
-                if (!response.isSuccessful) throw loginFailure(response, text)
-                SeafJson.parser.decodeFromString<AuthTokenDto>(text).token
-            }
+        return client.newCall(request).await().use { response ->
+            val text = withContext(io) { response.body?.string().orEmpty() }
+            if (!response.isSuccessful) throw loginFailure(response, text)
+            SeafJson.parser.decodeFromString<AuthTokenDto>(text).token
         }
     }
 
@@ -98,14 +96,13 @@ class SeafileApi(
             .url(baseUrl.newBuilder().addPathSegments(path).build())
             .apply { token?.let { header("Authorization", "Token $it") } }
             .build()
-        return withContext(io) {
-            client.newCall(request).execute().use { response ->
-                val text = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw SeafileException.fromSeahub(response.code, errorMessage(text), response.isWiped())
-                }
-                text
+        return client.newCall(request).await().use { response ->
+            // Body reading stays on IO: it is blocking, unlike the call itself.
+            val text = withContext(io) { response.body?.string().orEmpty() }
+            if (!response.isSuccessful) {
+                throw SeafileException.fromSeahub(response.code, errorMessage(text), response.isWiped())
             }
+            text
         }
     }
 
@@ -121,7 +118,7 @@ class SeafileApi(
             .url(baseUrl.newBuilder().addPathSegments("api2/device-wiped/").build())
             .post(body)
             .build()
-        withContext(io) { client.newCall(request).execute().close() }
+        client.newCall(request).await().close()
     }
 
     private fun loginFailure(response: Response, body: String): SeafileException {

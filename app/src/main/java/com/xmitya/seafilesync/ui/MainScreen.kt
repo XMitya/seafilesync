@@ -16,6 +16,12 @@ import com.xmitya.seafilesync.ui.login.LoginScreen
 import com.xmitya.seafilesync.ui.permissions.AskForNotificationPermission
 import com.xmitya.seafilesync.ui.permissions.BatteryOptimizationBanner
 import com.xmitya.seafilesync.ui.settings.SettingsScreen
+import android.content.Context
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import com.xmitya.seafilesync.R
+import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.ui.permissions.RequireAllFilesAccess
 
 @Composable
@@ -69,6 +75,8 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         Destination.Settings -> {
             val preferences by viewModel.settings.collectAsStateWithLifecycle()
             val account by viewModel.account.collectAsStateWithLifecycle()
+            val logSize by viewModel.logSize.collectAsStateWithLifecycle()
+            val context = LocalContext.current
             SettingsScreen(
                 preferences = preferences,
                 accountEmail = account?.email.orEmpty(),
@@ -78,8 +86,28 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onPollIntervalChanged = viewModel::setPollInterval,
                 onSignOut = viewModel::signOut,
                 onBack = viewModel::closeSettings,
+                logSizeBytes = logSize,
+                onShareLog = { shareLog(context, viewModel) },
+                onClearLog = viewModel::clearLog,
                 modifier = modifier,
             )
         }
     }
+}
+
+/**
+ * Hands the log to whatever the user picks. Shared through a FileProvider grant rather than a
+ * file path, which is the only way another app is allowed to read it, and from the cache so the
+ * copy is not kept around.
+ */
+private fun shareLog(context: Context, viewModel: MainViewModel) {
+    val exported = context.appContainer.log.exportTo(context.cacheDir)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", exported)
+    val share = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.settings_log_share_title))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(share, context.getString(R.string.settings_log_share_title)))
 }

@@ -1,6 +1,5 @@
 package com.xmitya.seafilesync.ui
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -50,8 +49,6 @@ data class LoginUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
 )
-
-private const val TAG = "SeafileSync"
 
 class MainViewModel(
     private val container: AppContainer,
@@ -125,11 +122,11 @@ class MainViewModel(
         viewModelScope.launch {
             val account = container.accountStore.current() ?: return@launch
             try {
-                Log.i(TAG, "Enabling ${library.name}, password supplied: ${password != null}")
+                container.log.info("Enabling ${library.name}, password supplied: ${password != null}")
                 container.syncEngine.enable(account, library.id, library.name, library.isWritable, password)
                 onSyncingStarted()
             } catch (failure: Exception) {
-                Log.w(TAG, "Could not enable ${library.name}", failure)
+                container.log.warn("Could not enable ${library.name}", failure)
                 _libraries.update { it.copy(errorMessage = failure.message ?: "Could not start syncing") }
             }
         }
@@ -150,6 +147,7 @@ class MainViewModel(
     fun openSettings() {
         viewModelScope.launch {
             _account.value = container.accountStore.current()
+            refreshLogSize()
             _destination.value = Destination.Settings
         }
     }
@@ -164,6 +162,20 @@ class MainViewModel(
 
     fun setPollInterval(seconds: Long) {
         viewModelScope.launch { container.settings.setPollInterval(seconds) }
+    }
+
+    private val _logSize = MutableStateFlow(0L)
+    val logSize: StateFlow<Long> = _logSize.asStateFlow()
+
+    fun refreshLogSize() {
+        viewModelScope.launch { _logSize.value = container.log.read().length.toLong() }
+    }
+
+    fun clearLog() {
+        viewModelScope.launch {
+            container.log.clear()
+            _logSize.value = 0
+        }
     }
 
     fun onServerUrlChanged(value: String) = _login.update { it.copy(serverUrl = value, errorMessage = null) }
@@ -244,9 +256,15 @@ class MainViewModel(
                 _libraries.update { it.copy(isRefreshing = false) }
             } catch (wiped: SeafileException.DeviceWiped) {
                 // The account is gone server-side; keeping local state would be pretending.
+                container.log.warn("Server reports this device was wiped; clearing the account")
                 container.accountStore.clear()
                 _destination.value = Destination.Login
             } catch (rejected: SeafileException.TokenRejected) {
+                // Logged because the app otherwise returns to the sign-in screen with no
+                // explanation, which is indistinguishable from having been signed out on purpose.
+                // Seafile keeps one token per (user, platform, device id), so signing in again
+                // from anywhere with the same device id invalidates this one.
+                container.log.warn("Token rejected by the server; signing out")
                 container.accountStore.clear()
                 _destination.value = Destination.Login
             } catch (failure: IOException) {
@@ -259,6 +277,7 @@ class MainViewModel(
 
     fun signOut() {
         viewModelScope.launch {
+            container.log.info("Signed out at the user's request")
             container.accountStore.clear()
             remoteLibraries.value = emptyList()
             _libraries.value = LibrariesUiState()

@@ -28,6 +28,8 @@ class SeafHttpApi(
     serverUrl: String,
     private val client: OkHttpClient,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** Optional so the API stays usable from tests without an Android context. */
+    private val onRejectedCommit: (String) -> Unit = {},
 ) {
 
     private val baseUrl: HttpUrl = SeafileApi.normalize(serverUrl)
@@ -67,7 +69,7 @@ class SeafHttpApi(
         } catch (rejected: SeafileException) {
             // The server validates the commit and answers with a bare status, so without the
             // body there is nothing to debug against.
-            android.util.Log.w("SeafileSync", "Server rejected commit: $body")
+            onRejectedCommit(body)
             throw rejected
         }
     }
@@ -193,7 +195,7 @@ class SeafHttpApi(
             .header("Authorization", "Token $token")
             .apply(build)
             .build()
-        return withContext(io) { client.newCall(request).execute() }
+        return client.newCall(request).await()
     }
 
     private inline fun <T> Response.consume(block: (okhttp3.ResponseBody) -> T): T = use {

@@ -28,6 +28,8 @@ data class Account(
 class AccountStore(
     private val dataStore: DataStore<Preferences>,
     private val cipher: TokenCipher,
+    /** Records the one failure here that is otherwise indistinguishable from a normal sign-out. */
+    private val onTokenUnreadable: (Throwable) -> Unit = {},
 ) {
 
     val account: Flow<Account?> = dataStore.data.map { it.toAccount() }
@@ -63,7 +65,9 @@ class AccountStore(
      */
     private fun Preferences.toAccount(): Account? {
         val encrypted = this[TOKEN] ?: return null
-        val token = runCatching { cipher.decrypt(encrypted) }.getOrNull() ?: return null
+        val token = runCatching { cipher.decrypt(encrypted) }
+            .onFailure(onTokenUnreadable)
+            .getOrNull() ?: return null
         return Account(
             serverUrl = this[SERVER_URL] ?: return null,
             email = this[EMAIL] ?: return null,

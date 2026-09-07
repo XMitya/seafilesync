@@ -1,7 +1,7 @@
 package com.xmitya.seafilesync.sync
 
 import android.os.FileObserver
-import android.util.Log
+import com.xmitya.seafilesync.app.SyncLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class LocalChangeWatcher(
     private val scope: CoroutineScope,
+    private val log: SyncLog,
     private val debounceMillis: Long = DEFAULT_DEBOUNCE,
     private val onChanged: suspend (repoId: String) -> Unit,
 ) {
@@ -38,7 +39,7 @@ class LocalChangeWatcher(
         if (directories.size > MAX_WATCHES) {
             // Better to fall back to the periodic scan entirely than to watch an arbitrary
             // subset and give the impression that everything is covered.
-            Log.i(TAG, "Not watching $repoId: ${directories.size} directories exceeds the watch budget")
+            log.info("Not watching $repoId: ${directories.size} directories exceed the watch budget")
             return
         }
         observers[repoId] = directories.map { directory: File ->
@@ -92,8 +93,6 @@ class LocalChangeWatcher(
     }
 
     private companion object {
-        const val TAG = "SeafileSync"
-
         /**
          * Create, delete, move and close-after-write. CLOSE_WRITE rather than MODIFY, because
          * MODIFY fires on every buffer flush during a long write while CLOSE_WRITE fires once,

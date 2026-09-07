@@ -39,6 +39,9 @@ fun SettingsScreen(
     onPollIntervalChanged: (Long) -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit,
+    logSizeBytes: Long = 0,
+    onShareLog: () -> Unit = {},
+    onClearLog: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -119,6 +122,33 @@ fun SettingsScreen(
             }
             HorizontalDivider()
 
+            Text(
+                text = stringResource(R.string.settings_diagnostics),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+            )
+            Text(
+                // Worth saying plainly: the interesting failures happen with the screen off,
+                // hours before anyone looks, which is why there is a file at all.
+                text = if (logSizeBytes > 0) {
+                    stringResource(R.string.settings_log_size, formatBytes(logSizeBytes))
+                } else {
+                    stringResource(R.string.settings_log_empty)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Row(Modifier.padding(8.dp)) {
+                TextButton(onClick = onShareLog, enabled = logSizeBytes > 0) {
+                    Text(stringResource(R.string.settings_log_share))
+                }
+                TextButton(onClick = onClearLog, enabled = logSizeBytes > 0) {
+                    Text(stringResource(R.string.settings_log_clear))
+                }
+            }
+            HorizontalDivider()
+
             TextButton(onClick = onSignOut, modifier = Modifier.padding(8.dp)) {
                 Text(
                     text = stringResource(R.string.libraries_sign_out),
@@ -144,3 +174,6 @@ private fun Setting(title: String, subtitle: String) {
 
 private fun formatInterval(seconds: Long): String =
     if (seconds < 60) "${seconds}s" else "${seconds / 60}m"
+
+private fun formatBytes(bytes: Long): String =
+    if (bytes < 1024) "$bytes B" else "${bytes / 1024} KB"

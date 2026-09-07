@@ -15,6 +15,8 @@ contents change is never re-uploaded and deletions and renames are never propaga
 - Conflicts keep both versions, using the same naming Seafile itself uses
 - Runs in a foreground service with a notification showing what is transferring
 - Survives being killed, Doze, and reboots
+- A bounded log on disk, shareable from Settings, because the failures worth reading happen in a
+  background service hours before anyone looks and logcat has long since overwritten them
 - Encrypted libraries, decrypted on the device. The password is verified locally against the
   magic the server publishes and never sent anywhere, so the server stores only ciphertext. The
   official app posts the password to the server and receives plaintext, which means the server
@@ -52,6 +54,16 @@ else can read and reports no error while doing it.
 
 Note that `connectedDebugAndroidTest` uninstalls the app afterwards, taking its data and its
 Keystore key with it. Run it before manual testing, not between steps.
+
+## When something goes wrong
+
+Settings has the log: how big it is, a button to share it, and one to clear it. It is capped at
+two files of 512 KB, so it cannot grow into the storage it is meant to be syncing into.
+
+Worth knowing about one entry in particular. Seafile keeps a single token per (user, platform,
+device id), so signing in again from anywhere with the same device id invalidates this device's
+token. The app then returns to the sign-in screen, which is indistinguishable from a deliberate
+sign-out unless the log is read -- so that case is logged explicitly.
 
 ## Talking to a server by hand
 
