@@ -8,3 +8,6 @@
 .cxx
 local.properties
 /.idea/
+
+# Local server credentials for scripts/dev-server.sh
+scripts/.env.local
