@@ -10,7 +10,9 @@ import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
 import com.xmitya.seafilesync.data.api.UserAgentInterceptor
 import com.xmitya.seafilesync.data.prefs.AccountStore
+import com.xmitya.seafilesync.data.db.SyncDatabase
 import com.xmitya.seafilesync.data.prefs.KeystoreTokenCipher
+import com.xmitya.seafilesync.sync.SyncEngine
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -51,6 +53,17 @@ class AppContainer(private val applicationContext: Context) {
 
     /** Matches the shape the desktop daemon reports, so sessions are recognisable server-side. */
     val userAgent: String = "Seafile/$appVersion (Android)"
+
+    val database: SyncDatabase by lazy { SyncDatabase.open(applicationContext) }
+
+    val syncEngine: SyncEngine by lazy {
+        SyncEngine(
+            repos = database.syncedRepos(),
+            fileIndex = database.fileIndex(),
+            apiFor = ::seafileApi,
+            seafHttpFor = ::seafHttpApi,
+        )
+    }
 
     fun seafileApi(serverUrl: String) = SeafileApi(serverUrl, httpClient)
 

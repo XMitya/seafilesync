@@ -53,9 +53,9 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             val state by viewModel.libraries.collectAsStateWithLifecycle()
             LibrariesScreen(
                 state = state,
-                onSync = { /* wired to the sync engine in M3 */ },
-                onStopSyncing = { /* wired to the sync engine in M3 */ },
-                onRetry = { viewModel.refreshLibraries() },
+                onSync = viewModel::startSyncing,
+                onStopSyncing = viewModel::stopSyncing,
+                onRetry = viewModel::startSyncing,
                 onRefresh = viewModel::refreshLibraries,
                 onSignOut = viewModel::signOut,
                 modifier = modifier,

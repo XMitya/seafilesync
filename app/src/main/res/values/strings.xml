@@ -57,6 +57,12 @@
     <string name="sync_state_paused">Sync paused</string>
     <string name="sync_state_error">Sync failed</string>
 
+    <!-- Ongoing sync notification (requirement 8) -->
+    <string name="notification_channel_sync">Synchronisation</string>
+    <string name="notification_channel_sync_description">Shows what is being transferred while libraries sync in the background.</string>
+    <string name="notification_idle">All libraries are up to date</string>
+    <string name="notification_syncing">Syncing %1$s — %2$s</string>
+
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>
     <string name="retry">Retry</string>

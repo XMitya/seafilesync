@@ -6,11 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.xmitya.seafilesync.app.AppContainer
 import com.xmitya.seafilesync.app.DeviceIdentity
 import com.xmitya.seafilesync.data.api.SeafileException
+import com.xmitya.seafilesync.data.db.SyncedRepoEntity
 import com.xmitya.seafilesync.data.prefs.Account
+import com.xmitya.seafilesync.sync.SyncStatus
 import com.xmitya.seafilesync.ui.libraries.LibrariesUiState
 import com.xmitya.seafilesync.ui.libraries.LibraryUi
 import com.xmitya.seafilesync.ui.libraries.SyncState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -42,7 +45,10 @@ data class LoginUiState(
     val errorMessage: String? = null,
 )
 
-class MainViewModel(private val container: AppContainer) : ViewModel() {
+class MainViewModel(
+    private val container: AppContainer,
+    private val onSyncingStarted: () -> Unit = {},
+) : ViewModel() {
 
     private val _destination = MutableStateFlow<Destination>(Destination.Loading)
     val destination: StateFlow<Destination> = _destination.asStateFlow()
@@ -56,12 +62,67 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     /** Credentials that are verified but not yet committed, pending a sync folder. */
     private var pendingAccount: Account? = null
 
+    /**
+     * The three inputs the list is derived from. They change independently -- the API list on
+     * refresh, the tracked set when the user enables a library, the status on every progress
+     * tick -- so each is kept separately and merged in one place. Deriving the list in more than
+     * one place is how a refresh ends up wiping the sync state off every row.
+     */
+    private val remoteLibraries = MutableStateFlow<List<LibraryUi>>(emptyList())
+
     init {
         viewModelScope.launch {
             val account = container.accountStore.current()
             _destination.value = if (account == null) Destination.Login else Destination.Libraries
             if (account != null) refreshLibraries()
         }
+        // Sync state lives in the database and the engine, not in this view model, so the list
+        // keeps reflecting reality while the service works in the background.
+        viewModelScope.launch {
+            combine(
+                remoteLibraries,
+                container.database.syncedRepos().observeAll(),
+                container.syncEngine.status,
+            ) { remote, tracked, status -> merge(remote, tracked, status) }
+                .collect { merged -> _libraries.update { it.copy(libraries = merged) } }
+        }
+    }
+
+    private fun merge(
+        remote: List<LibraryUi>,
+        tracked: List<SyncedRepoEntity>,
+        status: SyncStatus,
+    ): List<LibraryUi> {
+        val byId = tracked.associateBy { it.repoId }
+        return remote.map { library ->
+            val entity = byId[library.id] ?: return@map library
+            val progress = status.activeRepos[library.id]
+            when {
+                progress != null -> library.copy(
+                    state = SyncState.Syncing,
+                    localPath = entity.localPath,
+                    progress = progress.fraction,
+                )
+                entity.status == SyncedRepoEntity.STATUS_ERROR -> library.copy(
+                    state = SyncState.Error,
+                    localPath = entity.localPath,
+                    errorMessage = entity.errorMessage,
+                )
+                else -> library.copy(state = SyncState.Synced, localPath = entity.localPath)
+            }
+        }
+    }
+
+    fun startSyncing(library: LibraryUi) {
+        viewModelScope.launch {
+            val account = container.accountStore.current() ?: return@launch
+            container.syncEngine.enable(account, library.id, library.name, library.isWritable)
+            onSyncingStarted()
+        }
+    }
+
+    fun stopSyncing(library: LibraryUi) {
+        viewModelScope.launch { container.syncEngine.disable(library.id) }
     }
 
     fun onServerUrlChanged(value: String) = _login.update { it.copy(serverUrl = value, errorMessage = null) }
@@ -127,23 +188,19 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             }
             try {
                 val repos = container.seafileApi(account.serverUrl).repos(account.token)
-                _libraries.update { state ->
-                    state.copy(
-                        isRefreshing = false,
-                        libraries = repos.map { repo ->
-                            LibraryUi(
-                                id = repo.id,
-                                name = repo.name,
-                                sizeBytes = repo.size,
-                                modifiedAtSeconds = repo.mtime,
-                                // Nothing syncs yet; the engine fills this in from M3 on.
-                                state = SyncState.NotSynced,
-                                isEncrypted = repo.encrypted,
-                                isWritable = repo.isWritable,
-                            )
-                        },
+                remoteLibraries.value = repos.map { repo ->
+                    LibraryUi(
+                        id = repo.id,
+                        name = repo.name,
+                        sizeBytes = repo.size,
+                        modifiedAtSeconds = repo.mtime,
+                        // Merged with the tracked set and live progress by [merge].
+                        state = SyncState.NotSynced,
+                        isEncrypted = repo.encrypted,
+                        isWritable = repo.isWritable,
                     )
                 }
+                _libraries.update { it.copy(isRefreshing = false) }
             } catch (wiped: SeafileException.DeviceWiped) {
                 // The account is gone server-side; keeping local state would be pretending.
                 container.accountStore.clear()
@@ -162,6 +219,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun signOut() {
         viewModelScope.launch {
             container.accountStore.clear()
+            remoteLibraries.value = emptyList()
             _libraries.value = LibrariesUiState()
             _destination.value = Destination.Login
         }
@@ -170,8 +228,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private fun IOException.readableMessage(): String =
         message?.takeIf { it.isNotBlank() } ?: "Could not reach the server"
 
-    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
+    class Factory(
+        private val container: AppContainer,
+        private val onSyncingStarted: () -> Unit,
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel(container) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            MainViewModel(container, onSyncingStarted) as T
     }
 }

@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import com.xmitya.seafilesync.app.appContainer
+import com.xmitya.seafilesync.service.SyncForegroundService
 import com.xmitya.seafilesync.ui.MainScreen
 import com.xmitya.seafilesync.ui.MainViewModel
 import com.xmitya.seafilesync.ui.theme.SeafileSyncTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MainViewModel by viewModels { MainViewModel.Factory(appContainer) }
+    private val viewModel: MainViewModel by viewModels {
+        MainViewModel.Factory(appContainer) { SyncForegroundService.start(this) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
