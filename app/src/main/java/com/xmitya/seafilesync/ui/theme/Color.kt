@@ -1,4 +1,4 @@
-package ru.rustore.seafile_sync.ui.theme
+package com.xmitya.seafilesync.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "ru.rustore.seafile_sync"
+    namespace = "com.xmitya.seafilesync"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "ru.rustore.seafile_sync"
+        applicationId = "com.xmitya.seafilesync"
         minSdk = 34
         targetSdk = 37
         versionCode = 1

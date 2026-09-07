@@ -1,4 +1,4 @@
-package ru.rustore.seafile_sync.ui.theme
+package com.xmitya.seafilesync.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -34,7 +34,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun SeafilesyncTheme(
+fun SeafileSyncTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,

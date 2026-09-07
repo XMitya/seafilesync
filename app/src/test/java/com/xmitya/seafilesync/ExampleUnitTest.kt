@@ -1,4 +1,4 @@
-package ru.rustore.seafile_sync
+package com.xmitya.seafilesync
 
 import org.junit.Test
 
