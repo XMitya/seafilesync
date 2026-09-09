@@ -13,7 +13,6 @@ import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
 import com.xmitya.seafilesync.data.prefs.Account
 import com.xmitya.seafilesync.data.prefs.TokenCipher
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -23,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -199,25 +199,31 @@ class SyncEngine(
     suspend fun sync(account: Account, repo: SyncedRepoEntity): SyncOutcome = lock.withLock {
         // Run as a child job rather than inline, so stopping this library cancels the transfer
         // without also cancelling whatever called us -- the service's sync loop, usually.
-        val work = CoroutineScope(currentCoroutineContext()).async {
-            repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_SYNCING)
-            runSync(sessionFor(account), account, repo)
-        }
-        running[repo.repoId] = work
+        //
+        // A supervisor, because the child's failure has to reach us only through await(). As an
+        // ordinary child it also failed the caller's job, and the service's loop has no handler
+        // for that: a library that could not be reassembled crashed the app on every launch.
+        supervisorScope {
+            val work = async {
+                repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_SYNCING)
+                runSync(sessionFor(account), account, repo)
+            }
+            running[repo.repoId] = work
 
-        try {
-            work.await()
-        } catch (stopped: CancellationException) {
-            log.info("Sync of ${repo.name} was stopped")
-            SyncOutcome.Stopped(repo.repoId)
-        } catch (failure: IOException) {
-            val reason = failure.message ?: failure::class.simpleName.orEmpty()
-            log.warn("Sync of ${repo.name} failed", failure)
-            repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_ERROR, reason)
-            SyncOutcome.Failed(repo.repoId, reason)
-        } finally {
-            running.remove(repo.repoId)
-            _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
+            try {
+                work.await()
+            } catch (stopped: CancellationException) {
+                log.info("Sync of ${repo.name} was stopped")
+                SyncOutcome.Stopped(repo.repoId)
+            } catch (failure: IOException) {
+                val reason = failure.message ?: failure::class.simpleName.orEmpty()
+                log.warn("Sync of ${repo.name} failed", failure)
+                repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_ERROR, reason)
+                SyncOutcome.Failed(repo.repoId, reason)
+            } finally {
+                running.remove(repo.repoId)
+                _status.update { it.copy(activeRepos = it.activeRepos - repo.repoId) }
+            }
         }
     }
 
