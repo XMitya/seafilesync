@@ -11,3 +11,10 @@ local.properties
 
 # Local server credentials for scripts/dev-server.sh
 scripts/.env.local
+
+# Signing keys never belong here; CI gets the release key from a secret
+*.jks
+*.keystore
+
+# Kotlin compiler scratch and crash logs
+.kotlin/

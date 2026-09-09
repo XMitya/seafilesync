@@ -15,16 +15,35 @@ android {
         applicationId = "com.xmitya.seafilesync"
         minSdk = 34
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        // Release builds get these from the git tag (see .github/workflows/release.yml); a plain
+        // local build keeps the defaults.
+        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
+        versionName = providers.gradleProperty("versionName").getOrElse("1.0-dev")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The release key is never on disk in the repository. CI decodes it from a secret and points
+    // these variables at it; without them a release build is simply left unsigned.
+    val keystorePath = providers.environmentVariable("SIGNING_KEYSTORE").orNull
+    if (keystorePath != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = providers.environmentVariable("SIGNING_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
         release {
             optimization {
                 enable = false
+            }
+            if (keystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
