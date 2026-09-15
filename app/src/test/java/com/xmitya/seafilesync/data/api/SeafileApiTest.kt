@@ -168,4 +168,11 @@ class SeafileApiTest {
         assertEquals(expected, SeafileApi.normalize("  https://seafile.example.com/  ").toString())
         assertEquals("http://192.168.1.5:8000/", SeafileApi.normalize("http://192.168.1.5:8000").toString())
     }
+
+    @Test
+    fun `an address that is not a url is rejected when the client is built`() {
+        // The sign-in screen relies on this happening in the constructor rather than at the first
+        // request, so a typo turns into a message on the form instead of a crash in the launch.
+        assertFailsWith<IllegalArgumentException> { SeafileApi("https://see file.example.com", OkHttpClient()) }
+    }
 }

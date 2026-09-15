@@ -243,7 +243,19 @@ class MainViewModel(
         viewModelScope.launch {
             try {
                 val serverUrl = form.fullServerUrl
-                val api = container.seafileApi(serverUrl, form.skipCertificateCheck)
+                // Only the parse is guarded. SeafileApi turns the address into an HttpUrl in its
+                // constructor and rejects anything that is not one -- a space, a typo, a stray
+                // character -- and okhttp's own message reads like a parser error. Widening this
+                // to the whole call would also swallow the device-id require() inside login(),
+                // which is a bug in this app rather than something the user typed.
+                val api = try {
+                    container.seafileApi(serverUrl, form.skipCertificateCheck)
+                } catch (malformed: IllegalArgumentException) {
+                    _login.update {
+                        it.copy(isSubmitting = false, errorMessage = "Check the server address")
+                    }
+                    return@launch
+                }
                 val token = api.login(
                     username = form.email.trim(),
                     password = form.password,

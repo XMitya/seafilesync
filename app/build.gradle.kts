@@ -81,7 +81,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -98,6 +97,9 @@ dependencies {
     kspTest(libs.androidx.room.compiler)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // Nothing imports Espresso -- the instrumented tests drive Compose -- but it is what pins
+    // androidx.concurrent:concurrent-futures to the 1.1.0 the androidTest classpath is
+    // constrained to. Drop it and androidx.test.ext:junit pulls 1.2.0 and resolution fails.
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.kotlin.test)
