@@ -1,3 +1,5 @@
+<img src="art/icon-rounded.png" alt="" width="88" align="right">
+
 # Seafile Sync
 
 An Android client that synchronises Seafile libraries the way the desktop client does: chosen
@@ -88,6 +90,30 @@ Worth knowing about one entry in particular. Seafile keeps a single token per (u
 device id), so signing in again from anywhere with the same device id invalidates this device's
 token. The app then returns to the sign-in screen, which is indistinguishable from a deliberate
 sign-out unless the log is read -- so that case is logged explicitly.
+
+## The icon
+
+A cloud over a breaking wave, in the family of the official Seafile mark and drawn in the same
+amber, on a navy field so that the two apps stay apart in a launcher rather than looking like one
+app installed twice.
+
+It is generated rather than drawn by hand -- the wave is a numerically sampled ribbon over a
+bezier-and-spiral centreline, so its path data is not something to edit in an XML file. Change
+`art/generate.py` and re-run it:
+
+```
+python3 art/generate.py
+```
+
+That rewrites the adaptive icon vectors, the monochrome and notification drawables, every mipmap
+raster and the masters in `art/` from one set of path strings, so the vectors and the rasters
+cannot drift apart. It needs `rsvg-convert` and Pillow, and it is not part of the Gradle build.
+
+Two things the geometry has to respect, both of which were got wrong first and caught by
+rendering: every subpath winds the same way, or `fillType="nonZero"` subtracts the overlapping
+puffs instead of unioning them into a cloud; and the adaptive safe zone is a 66dp *circle*, not a
+66dp square, so shapes are fitted by maximum radius about the centre or the wave's tail and curl
+are clipped by a round mask.
 
 ## Talking to a server by hand
 

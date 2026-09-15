@@ -39,7 +39,8 @@ class SyncNotifications(private val context: Context) {
     fun build(status: SyncStatus): Notification {
         val active = status.activeRepos.values.firstOrNull()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_sync)
+            .setSmallIcon(R.drawable.ic_stat_sync)
+            .setColor(context.getColor(R.color.brand_amber))
             .setContentTitle(context.getString(R.string.app_name))
             .setContentIntent(openApp())
             .setOngoing(true)

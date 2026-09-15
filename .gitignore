@@ -18,3 +18,6 @@ scripts/.env.local
 
 # Kotlin compiler scratch and crash logs
 .kotlin/
+
+# Python bytecode from art/generate.py
+__pycache__/
