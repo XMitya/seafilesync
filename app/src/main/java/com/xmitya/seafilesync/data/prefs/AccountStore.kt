@@ -2,6 +2,7 @@ package com.xmitya.seafilesync.data.prefs
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,12 @@ data class Account(
     val syncRoot: String,
     /** Stable per-install id sent at login; the server uses it to list and wipe devices. */
     val deviceId: String,
+    /**
+     * Whether TLS certificates from this server are accepted without being checked. Set by the
+     * user when connecting, because a Seafile instance on a LAN commonly serves a self-signed
+     * certificate. Stored rather than asked again so background syncing survives a restart.
+     */
+    val allowInsecureTls: Boolean = false,
 )
 
 class AccountStore(
@@ -43,11 +50,16 @@ class AccountStore(
             prefs[TOKEN] = cipher.encrypt(account.token)
             prefs[SYNC_ROOT] = account.syncRoot
             prefs[DEVICE_ID] = account.deviceId
+            prefs[ALLOW_INSECURE_TLS] = account.allowInsecureTls
         }
     }
 
     suspend fun updateSyncRoot(path: String) {
         dataStore.edit { it[SYNC_ROOT] = path }
+    }
+
+    suspend fun updateInsecureTls(allow: Boolean) {
+        dataStore.edit { it[ALLOW_INSECURE_TLS] = allow }
     }
 
     /**
@@ -74,6 +86,10 @@ class AccountStore(
             token = token,
             syncRoot = this[SYNC_ROOT] ?: return null,
             deviceId = this[DEVICE_ID] ?: return null,
+            // Absent for accounts connected before the setting existed, and the safe reading of
+            // that is that the certificate was checked. Defaulted rather than treated as a
+            // missing field, which would make those accounts look like no account at all.
+            allowInsecureTls = this[ALLOW_INSECURE_TLS] ?: false,
         )
     }
 
@@ -83,5 +99,6 @@ class AccountStore(
         val TOKEN = stringPreferencesKey("token")
         val SYNC_ROOT = stringPreferencesKey("sync_root")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val ALLOW_INSECURE_TLS = booleanPreferencesKey("allow_insecure_tls")
     }
 }

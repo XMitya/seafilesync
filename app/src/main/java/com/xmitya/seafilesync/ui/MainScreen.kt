@@ -38,6 +38,8 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             LoginScreen(
                 state = state,
                 onServerUrlChanged = viewModel::onServerUrlChanged,
+                onUseHttpsChanged = viewModel::onUseHttpsChanged,
+                onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,
                 onEmailChanged = viewModel::onEmailChanged,
                 onPasswordChanged = viewModel::onPasswordChanged,
                 onOtpChanged = viewModel::onOtpChanged,
@@ -82,7 +84,9 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 accountEmail = account?.email.orEmpty(),
                 serverUrl = account?.serverUrl.orEmpty(),
                 syncRoot = account?.syncRoot.orEmpty(),
+                allowInsecureTls = account?.allowInsecureTls == true,
                 onWifiOnlyChanged = viewModel::setWifiOnly,
+                onInsecureTlsChanged = viewModel::setInsecureTls,
                 onPollIntervalChanged = viewModel::setPollInterval,
                 onSignOut = viewModel::signOut,
                 onBack = viewModel::closeSettings,

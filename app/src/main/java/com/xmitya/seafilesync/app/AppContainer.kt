@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.xmitya.seafilesync.BuildConfig
+import com.xmitya.seafilesync.data.api.InsecureTrust
 import com.xmitya.seafilesync.data.api.RetryInterceptor
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
@@ -46,6 +47,22 @@ class AppContainer(private val applicationContext: Context) {
             .build()
     }
 
+    /**
+     * The same client with the certificate and hostname checks removed, for the accounts that
+     * asked for it. Derived with newBuilder so it shares the connection pool, dispatcher and
+     * interceptors rather than standing up a second copy of all of them, and lazy so a process
+     * that never touches such an account never builds an SSLContext.
+     */
+    private val insecureHttpClient: OkHttpClient by lazy {
+        httpClient.newBuilder()
+            .sslSocketFactory(InsecureTrust.socketFactory(), InsecureTrust.trustManager)
+            .hostnameVerifier(InsecureTrust.hostnameVerifier())
+            .build()
+    }
+
+    private fun clientFor(allowInsecureTls: Boolean) =
+        if (allowInsecureTls) insecureHttpClient else httpClient
+
     private val tokenCipher: KeystoreTokenCipher by lazy { KeystoreTokenCipher() }
 
     val accountStore: AccountStore by lazy {
@@ -83,9 +100,11 @@ class AppContainer(private val applicationContext: Context) {
         )
     }
 
-    fun seafileApi(serverUrl: String) = SeafileApi(serverUrl, httpClient)
+    fun seafileApi(serverUrl: String, allowInsecureTls: Boolean = false) =
+        SeafileApi(serverUrl, clientFor(allowInsecureTls))
 
-    fun seafHttpApi(serverUrl: String) = SeafHttpApi(serverUrl, httpClient) { body ->
-        log.warn("Server rejected commit: $body")
-    }
+    fun seafHttpApi(serverUrl: String, allowInsecureTls: Boolean = false) =
+        SeafHttpApi(serverUrl, clientFor(allowInsecureTls)) { body ->
+            log.warn("Server rejected commit: $body")
+        }
 }

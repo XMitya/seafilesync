@@ -1,6 +1,8 @@
 package com.xmitya.seafilesync.data.prefs
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.core.DataStore
 import kotlinx.coroutines.flow.first
@@ -8,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -91,6 +94,42 @@ class AccountStoreTest {
         val updated = accountStore.current()!!
         assertEquals("/storage/emulated/0/Documents/Seafile", updated.syncRoot)
         assertEquals(account.token, updated.token)
+    }
+
+    @Test
+    fun `the certificate exemption survives a round trip`() = runTest {
+        val (accountStore, _) = store()
+
+        accountStore.save(account.copy(allowInsecureTls = true))
+
+        assertTrue(accountStore.current()!!.allowInsecureTls)
+    }
+
+    @Test
+    fun `the certificate exemption can be changed without logging in again`() = runTest {
+        val (accountStore, _) = store()
+        accountStore.save(account)
+
+        accountStore.updateInsecureTls(true)
+
+        val updated = accountStore.current()!!
+        assertTrue(updated.allowInsecureTls)
+        assertEquals(account.token, updated.token)
+    }
+
+    @Test
+    fun `an account stored before the exemption existed still loads, with checking on`() = runTest {
+        // Every other field reads as "no account at all" when its key is missing. Repeating that
+        // here would have signed out everyone who upgraded, so the key defaults instead -- and it
+        // has to default to checking certificates, which is what those accounts were doing.
+        val (accountStore, dataStore) = store()
+        accountStore.save(account)
+        dataStore.edit { it.remove(booleanPreferencesKey("allow_insecure_tls")) }
+
+        val loaded = accountStore.current()
+
+        assertEquals(account.email, loaded!!.email)
+        assertFalse(loaded.allowInsecureTls)
     }
 
     @Test

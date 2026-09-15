@@ -64,8 +64,8 @@ class SyncEngine(
      * when the engine is constructed -- on a fresh install nothing is signed in -- and reading
      * it eagerly meant blocking the main thread for a server URL that was still empty.
      */
-    private val apiFor: (serverUrl: String) -> SeafileApi,
-    private val seafHttpFor: (serverUrl: String) -> SeafHttpApi,
+    private val apiFor: (serverUrl: String, allowInsecureTls: Boolean) -> SeafileApi,
+    private val seafHttpFor: (serverUrl: String, allowInsecureTls: Boolean) -> SeafHttpApi,
     /** Protects the stored library password; the same Keystore key as the account token. */
     private val cipher: TokenCipher,
     private val log: SyncLog,
@@ -82,7 +82,10 @@ class SyncEngine(
     }
 
     private fun sessionFor(account: Account) =
-        Session(apiFor(account.serverUrl), seafHttpFor(account.serverUrl))
+        Session(
+            apiFor(account.serverUrl, account.allowInsecureTls),
+            seafHttpFor(account.serverUrl, account.allowInsecureTls),
+        )
 
     private val _status = MutableStateFlow(SyncStatus())
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
@@ -113,7 +116,8 @@ class SyncEngine(
         val localPath = File(account.syncRoot, name).path
         File(localPath).mkdirs()
 
-        val info = apiFor(account.serverUrl).downloadInfo(account.token, repoId)
+        val info = apiFor(account.serverUrl, account.allowInsecureTls)
+            .downloadInfo(account.token, repoId)
         if (info.isEncrypted) {
             val given = password ?: throw WrongLibraryPasswordException()
             // Checked locally against the magic the server already published, so the password

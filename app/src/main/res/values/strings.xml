@@ -3,6 +3,10 @@
 
     <!-- Login -->
     <string name="login_title">Connect a Seafile account</string>
+    <string name="login_scheme_label">How to connect</string>
+    <string name="login_scheme_https">https</string>
+    <string name="login_scheme_http">http</string>
+    <string name="login_http_explanation">Everything sent to this server, including your password, travels unencrypted. Only reasonable on a network you trust.</string>
     <string name="login_server">Server address</string>
     <string name="login_server_hint">seafile.example.com</string>
     <string name="login_email">Email</string>
@@ -89,6 +93,10 @@
     <string name="settings_log_empty">Nothing logged yet</string>
     <string name="settings_log_size">%1$s of log</string>
     <string name="settings_log_share_title">Seafile Sync log</string>
+
+    <!-- Certificates. Shared between the login and settings screens. -->
+    <string name="insecure_tls_title">Skip certificate check</string>
+    <string name="insecure_tls_explanation">Accepts any certificate the server presents, including one that is self-signed or expired. Anyone able to sit between this device and the server can then read and alter what is synced. Turn this on only for a server you run yourself.</string>
 
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>

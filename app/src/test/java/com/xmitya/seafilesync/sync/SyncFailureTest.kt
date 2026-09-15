@@ -87,8 +87,8 @@ class SyncFailureTest {
         engine = SyncEngine(
             repos = database.syncedRepos(),
             fileIndex = database.fileIndex(),
-            apiFor = { SeafileApi(it, client) },
-            seafHttpFor = { SeafHttpApi(it, client) },
+            apiFor = { url, _ -> SeafileApi(url, client) },
+            seafHttpFor = { url, _ -> SeafHttpApi(url, client) },
             cipher = PlainCipher,
             log = log,
         )
