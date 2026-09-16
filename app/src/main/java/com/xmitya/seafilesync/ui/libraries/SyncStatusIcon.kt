@@ -49,7 +49,7 @@ fun SyncStatusIcon(state: SyncState, modifier: Modifier = Modifier) {
             SyncState.Paused -> R.string.sync_state_paused
             SyncState.Error -> R.string.sync_state_error
             SyncState.NotSynced -> return
-        }
+        },
     )
 
     val tint = when (state) {

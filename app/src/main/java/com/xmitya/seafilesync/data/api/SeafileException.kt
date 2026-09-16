@@ -10,10 +10,14 @@ import java.io.IOException
  * agree: 440 means "library password required" to seahub and "bad filename" to the fileserver.
  * The two are therefore mapped separately, by [fromSeahub] and [fromFileServer].
  */
-sealed class SeafileException(message: String) : IOException(message) {
+sealed class SeafileException(
+    message: String,
+) : IOException(message) {
 
     /** Credentials rejected at login. */
-    class InvalidCredentials(message: String) : SeafileException(message)
+    class InvalidCredentials(
+        message: String,
+    ) : SeafileException(message)
 
     /** Login needs a one-time code; retry with [SeafileApi.login]'s `otp`. */
     class TwoFactorRequired : SeafileException("Two-factor code required")
@@ -28,9 +32,13 @@ sealed class SeafileException(message: String) : IOException(message) {
     class DeviceWiped : SeafileException("Device was remotely wiped")
 
     /** The account may not perform this operation on this library. */
-    class PermissionDenied(message: String) : SeafileException(message)
+    class PermissionDenied(
+        message: String,
+    ) : SeafileException(message)
 
-    class LibraryNotFound(message: String) : SeafileException(message)
+    class LibraryNotFound(
+        message: String,
+    ) : SeafileException(message)
 
     class LibraryDeleted : SeafileException("Library was deleted")
 
@@ -47,16 +55,24 @@ sealed class SeafileException(message: String) : IOException(message) {
      * The server refused a commit because blocks it references were never uploaded. Recoverable:
      * push the missing blocks and retry.
      */
-    class BlocksMissing(val body: String) : SeafileException("Server is missing blocks: $body")
+    class BlocksMissing(
+        val body: String,
+    ) : SeafileException("Server is missing blocks: $body")
 
     /** Garbage collection ran while the push was in flight. Retrying is the intended response. */
     class GarbageCollectionConflict : SeafileException("Garbage collection conflict, retry")
 
     class RateLimited : SeafileException("Rate limited by the server")
 
-    class ServerError(val code: Int, message: String) : SeafileException("Server error $code: $message")
+    class ServerError(
+        val code: Int,
+        message: String,
+    ) : SeafileException("Server error $code: $message")
 
-    class Unexpected(val code: Int, message: String) : SeafileException("Unexpected response $code: $message")
+    class Unexpected(
+        val code: Int,
+        message: String,
+    ) : SeafileException("Unexpected response $code: $message")
 
     companion object {
 

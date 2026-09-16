@@ -24,15 +24,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.xmitya.seafilesync.R
 import com.xmitya.seafilesync.data.fs.DirectoryBrowser
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 
 const val FOLDER_ENTRY_TAG = "folder-entry"
 const val FOLDER_CONFIRM_TAG = "folder-confirm"
@@ -113,7 +112,10 @@ fun SyncFolderScreen(
                     FolderRow(
                         name = stringResource(R.string.folder_up),
                         subtitle = parent.path,
-                        onClick = { current = parent; errorMessage = null },
+                        onClick = {
+                            current = parent
+                            errorMessage = null
+                        },
                     )
                     HorizontalDivider()
                 }
@@ -124,7 +126,10 @@ fun SyncFolderScreen(
                     subtitle = entry.childDirectoryCount
                         .takeIf { it > 0 }
                         ?.let { pluralStringResource(R.plurals.folder_child_count, it, it) },
-                    onClick = { current = entry.file; errorMessage = null },
+                    onClick = {
+                        current = entry.file
+                        errorMessage = null
+                    },
                 )
                 HorizontalDivider()
             }
@@ -136,9 +141,12 @@ fun SyncFolderScreen(
             onDismiss = { creatingFolder = false },
             onCreate = { name ->
                 creatingFolder = false
-                browser.createDirectory(listing.current, name)
-                    .onSuccess { current = it; errorMessage = null }
-                    .onFailure { errorMessage = it.message }
+                browser
+                    .createDirectory(listing.current, name)
+                    .onSuccess {
+                        current = it
+                        errorMessage = null
+                    }.onFailure { errorMessage = it.message }
             },
         )
     }
@@ -151,7 +159,7 @@ private fun FolderRow(name: String, subtitle: String?, onClick: () -> Unit) {
             .fillMaxWidth()
             .testTag(FOLDER_ENTRY_TAG)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         subtitle?.let {

@@ -14,10 +14,10 @@ import com.xmitya.seafilesync.ui.libraries.LibrariesUiState
 import com.xmitya.seafilesync.ui.libraries.LibraryUi
 import com.xmitya.seafilesync.ui.libraries.SyncState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,6 +26,7 @@ import java.io.IOException
 /** Where the user currently is. Only three places exist, so this beats a navigation graph. */
 sealed interface Destination {
     data object Loading : Destination
+
     data object Login : Destination
 
     /**
@@ -209,7 +210,12 @@ class MainViewModel(
     val logSize: StateFlow<Long> = _logSize.asStateFlow()
 
     fun refreshLogSize() {
-        viewModelScope.launch { _logSize.value = container.log.read().length.toLong() }
+        viewModelScope.launch {
+            _logSize.value = container.log
+                .read()
+                .length
+                .toLong()
+        }
     }
 
     fun clearLog() {
@@ -232,7 +238,9 @@ class MainViewModel(
         _login.update { it.copy(allowInsecureTls = value, errorMessage = null) }
 
     fun onEmailChanged(value: String) = _login.update { it.copy(email = value, errorMessage = null) }
+
     fun onPasswordChanged(value: String) = _login.update { it.copy(password = value, errorMessage = null) }
+
     fun onOtpChanged(value: String) = _login.update { it.copy(otp = value, errorMessage = null) }
 
     fun signIn() {
@@ -302,11 +310,16 @@ class MainViewModel(
                 return@launch
             }
             _libraries.update {
-                it.copy(isRefreshing = true, errorMessage = null,
-                    accountEmail = account.email, syncRoot = account.syncRoot)
+                it.copy(
+                    isRefreshing = true,
+                    errorMessage = null,
+                    accountEmail = account.email,
+                    syncRoot = account.syncRoot,
+                )
             }
             try {
-                val repos = container.seafileApi(account.serverUrl, account.allowInsecureTls)
+                val repos = container
+                    .seafileApi(account.serverUrl, account.allowInsecureTls)
                     .repos(account.token)
                 remoteLibraries.value = repos.map { repo ->
                     LibraryUi(

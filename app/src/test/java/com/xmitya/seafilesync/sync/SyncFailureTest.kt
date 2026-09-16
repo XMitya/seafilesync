@@ -46,7 +46,8 @@ class SyncFailureTest {
 
     private val repoId = "79dc614e-d7f4-47a5-8bcc-10400a0a08cb"
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val database = Room.inMemoryDatabaseBuilder(context, SyncDatabase::class.java)
+    private val database = Room
+        .inMemoryDatabaseBuilder(context, SyncDatabase::class.java)
         .allowMainThreadQueries()
         .build()
 
@@ -74,6 +75,7 @@ class SyncFailureTest {
 
     private object PlainCipher : TokenCipher {
         override fun encrypt(plaintext: String) = plaintext
+
         override fun decrypt(ciphertext: String) = ciphertext
     }
 

@@ -14,6 +14,7 @@ import androidx.core.app.ServiceCompat
 import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.sync.LocalChangeWatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -22,7 +23,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
-import kotlinx.coroutines.Dispatchers
 
 /**
  * Runs the sync loop outside the activity.
@@ -153,10 +153,16 @@ class SyncForegroundService : Service() {
         if (wakeLock?.isHeld == true) return
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$LOCK_TAG:transfer")
-            .apply { setReferenceCounted(false); acquire(WAKE_LOCK_TIMEOUT_MILLIS) }
+            .apply {
+                setReferenceCounted(false)
+                acquire(WAKE_LOCK_TIMEOUT_MILLIS)
+            }
         wifiLock = getSystemService(WifiManager::class.java)
             .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$LOCK_TAG:transfer")
-            .apply { setReferenceCounted(false); acquire() }
+            .apply {
+                setReferenceCounted(false)
+                acquire()
+            }
     }
 
     private fun releaseLocks() {

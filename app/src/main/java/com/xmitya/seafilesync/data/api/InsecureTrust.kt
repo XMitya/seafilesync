@@ -42,7 +42,8 @@ object InsecureTrust {
     fun hostnameVerifier(): HostnameVerifier = HostnameVerifier { _, _ -> true }
 
     fun socketFactory(): SSLSocketFactory =
-        SSLContext.getInstance("TLS")
+        SSLContext
+            .getInstance("TLS")
             .apply { init(null, arrayOf(trustManager), SecureRandom()) }
             .socketFactory
 }

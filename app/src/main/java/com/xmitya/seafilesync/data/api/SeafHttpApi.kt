@@ -5,7 +5,6 @@ import com.xmitya.seafilesync.data.api.model.HeadCommitDto
 import com.xmitya.seafilesync.data.fs.SeafJson
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -81,8 +80,14 @@ class SeafHttpApi(
      */
     suspend fun updateHead(token: String, repoId: String, commitId: String) {
         request(token) {
-            url(repo(repoId).addPathSegment("commit").addPathSegment("HEAD").addPathSegment("")
-                .addQueryParameter("head", commitId).build())
+            url(
+                repo(repoId)
+                    .addPathSegment("commit")
+                    .addPathSegment("HEAD")
+                    .addPathSegment("")
+                    .addQueryParameter("head", commitId)
+                    .build(),
+            )
             put(EMPTY_BODY)
         }.consume { }
     }
@@ -103,7 +108,7 @@ class SeafHttpApi(
                 .addQueryParameter("server-head", serverHead)
                 .apply { clientHead?.let { addQueryParameter("client-head", it) } }
                 .apply { if (dirOnly) addQueryParameter("dir-only", "1") }
-                .build()
+                .build(),
         )
     }.consume { SeafJson.parser.decodeFromString(it.string()) }
 
@@ -188,7 +193,8 @@ class SeafHttpApi(
     private fun json(body: String): RequestBody = body.toRequestBody(SeafileApi.JSON)
 
     private suspend fun request(token: String, build: Request.Builder.() -> Unit): Response {
-        val request = Request.Builder()
+        val request = Request
+            .Builder()
             // The desktop daemon sends the sync token in both headers; some deployments only
             // look at one of them.
             .header("Seafile-Repo-Token", token)

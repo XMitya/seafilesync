@@ -19,13 +19,18 @@ import kotlin.test.assertFailsWith
  */
 class InsecureTrustTest {
 
-    private val certificate = HeldCertificate.Builder()
+    private val certificate = HeldCertificate
+        .Builder()
         .addSubjectAlternativeName("seafile.example.com")
         .build()
 
     private val server = MockWebServer().apply {
         useHttps(
-            HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(),
+            HandshakeCertificates
+                .Builder()
+                .heldCertificate(certificate)
+                .build()
+                .sslSocketFactory(),
             false,
         )
         enqueue(MockResponse().setBody("ok"))
@@ -35,7 +40,8 @@ class InsecureTrustTest {
     @After
     fun tearDown() = server.shutdown()
 
-    private val insecure = OkHttpClient.Builder()
+    private val insecure = OkHttpClient
+        .Builder()
         .sslSocketFactory(InsecureTrust.socketFactory(), InsecureTrust.trustManager)
         .hostnameVerifier(InsecureTrust.hostnameVerifier())
         .build()
@@ -45,11 +51,17 @@ class InsecureTrustTest {
      * while MockWebServer listens on IPv4, and OkHttp reports the first route's ConnectException,
      * which would hide the TLS failure these tests are about.
      */
-    private fun url() = server.url("/").newBuilder().host("127.0.0.1").build()
+    private fun url() = server
+        .url("/")
+        .newBuilder()
+        .host("127.0.0.1")
+        .build()
 
     private fun get(client: OkHttpClient): String =
-        client.newCall(Request.Builder().url(url()).build())
-            .execute().use { it.body?.string().orEmpty() }
+        client
+            .newCall(Request.Builder().url(url()).build())
+            .execute()
+            .use { it.body?.string().orEmpty() }
 
     @Test
     fun `a self-signed certificate is refused by default`() {
@@ -66,10 +78,12 @@ class InsecureTrustTest {
         // The certificate names seafile.example.com while the server answers on localhost, which
         // is the ordinary shape of a LAN server reached by address. Dropping the hostname check
         // as well is what makes the exemption actually usable.
-        val trusting = HandshakeCertificates.Builder()
+        val trusting = HandshakeCertificates
+            .Builder()
             .addTrustedCertificate(certificate.certificate)
             .build()
-        val client = OkHttpClient.Builder()
+        val client = OkHttpClient
+            .Builder()
             .sslSocketFactory(trusting.sslSocketFactory(), trusting.trustManager)
             .build()
 

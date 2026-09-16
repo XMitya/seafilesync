@@ -15,6 +15,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 interface TokenCipher {
     fun encrypt(plaintext: String): String
+
     fun decrypt(ciphertext: String): String
 }
 
@@ -28,7 +29,9 @@ interface TokenCipher {
  * The IV is generated per encryption and prepended to the ciphertext; reusing an IV with GCM
  * would be a real break, so it is never supplied by the caller.
  */
-class KeystoreTokenCipher(private val keyAlias: String = DEFAULT_ALIAS) : TokenCipher {
+class KeystoreTokenCipher(
+    private val keyAlias: String = DEFAULT_ALIAS,
+) : TokenCipher {
 
     override fun encrypt(plaintext: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -56,16 +59,16 @@ class KeystoreTokenCipher(private val keyAlias: String = DEFAULT_ALIAS) : TokenC
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER)
         generator.init(
-            KeyGenParameterSpec.Builder(
-                keyAlias,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-            )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            KeyGenParameterSpec
+                .Builder(
+                    keyAlias,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(KEY_SIZE_BITS)
                 // Syncing runs in the background, so the key must be usable with the screen locked.
                 .setUserAuthenticationRequired(false)
-                .build()
+                .build(),
         )
         return generator.generateKey()
     }

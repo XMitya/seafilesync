@@ -10,8 +10,8 @@ import com.xmitya.seafilesync.data.api.RetryInterceptor
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
 import com.xmitya.seafilesync.data.api.UserAgentInterceptor
-import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.db.SyncDatabase
+import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.prefs.KeystoreTokenCipher
 import com.xmitya.seafilesync.data.prefs.SyncSettings
 import com.xmitya.seafilesync.service.NetworkPolicy
@@ -29,10 +29,13 @@ private val Context.accountDataStore: DataStore<Preferences> by preferencesDataS
  *
  * Dependencies are lazy so that nothing but the process itself is built on cold start.
  */
-class AppContainer(private val applicationContext: Context) {
+class AppContainer(
+    private val applicationContext: Context,
+) {
 
     val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient
+            .Builder()
             // Kept short on purpose. A host with several A records where only some answer is
             // common, and OkHttp only tries the next address once this expires, so a long
             // connect timeout turns a working server into a two-minute hang.
@@ -54,7 +57,8 @@ class AppContainer(private val applicationContext: Context) {
      * that never touches such an account never builds an SSLContext.
      */
     private val insecureHttpClient: OkHttpClient by lazy {
-        httpClient.newBuilder()
+        httpClient
+            .newBuilder()
             .sslSocketFactory(InsecureTrust.socketFactory(), InsecureTrust.trustManager)
             .hostnameVerifier(InsecureTrust.hostnameVerifier())
             .build()

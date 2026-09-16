@@ -59,7 +59,7 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
         ) {
             Setting(
                 title = stringResource(R.string.settings_account),

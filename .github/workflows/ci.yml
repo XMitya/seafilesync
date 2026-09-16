@@ -30,8 +30,9 @@ jobs:
           # Only main writes the dependency cache; branches and PRs read it.
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Run unit tests and build the debug APK
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Run the checks and build the debug APK
+        # check covers the unit tests, ktlint, Android lint and the Kover coverage gate.
+        run: ./gradlew :app:check :app:assembleDebug --stacktrace
 
       - name: Keep the test reports
         if: always()

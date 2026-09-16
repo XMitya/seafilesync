@@ -17,7 +17,10 @@ import java.util.Locale
  * Deliberately small and bounded. A sync client can produce a line per file, so an unbounded log
  * would quietly consume the storage it was meant to be syncing into.
  */
-class SyncLog(private val directory: File, private val clock: () -> Long = System::currentTimeMillis) {
+class SyncLog(
+    private val directory: File,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
 
     private val lock = Any()
 

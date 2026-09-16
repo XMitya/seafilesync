@@ -1,16 +1,16 @@
 package com.xmitya.seafilesync.data.prefs
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -22,8 +22,11 @@ class AccountStoreTest {
     val folder = TemporaryFolder()
 
     /** Stands in for the Keystore, which JVM tests cannot reach. */
-    private class ReversingCipher(var failing: Boolean = false) : TokenCipher {
+    private class ReversingCipher(
+        var failing: Boolean = false,
+    ) : TokenCipher {
         override fun encrypt(plaintext: String) = plaintext.reversed()
+
         override fun decrypt(ciphertext: String): String {
             if (failing) throw IllegalStateException("key is gone")
             return ciphertext.reversed()
@@ -66,7 +69,12 @@ class AccountStoreTest {
 
         accountStore.save(account)
 
-        val raw = dataStore.data.first().asMap().entries.single { it.key.name == "token" }.value as String
+        val raw = dataStore.data
+            .first()
+            .asMap()
+            .entries
+            .single { it.key.name == "token" }
+            .value as String
         assertNotEquals(account.token, raw)
         assertTrue(raw.isNotEmpty())
     }

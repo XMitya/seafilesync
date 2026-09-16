@@ -14,7 +14,8 @@ class RetryInterceptorTest {
     private val server = MockWebServer().apply { start() }
     private val slept = mutableListOf<Long>()
 
-    private val client = OkHttpClient.Builder()
+    private val client = OkHttpClient
+        .Builder()
         .addInterceptor(RetryInterceptor(maxAttempts = 4, sleeper = { slept += it }))
         .build()
 

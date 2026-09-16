@@ -65,7 +65,10 @@ class LibraryCryptoTest {
     fun `an empty block round-trips too`() {
         val key = LibraryCrypto.fileKey(password, serverRandomKey, encVersion, "")
 
-        assertArrayEquals(ByteArray(0), LibraryCrypto.decrypt(LibraryCrypto.encrypt(ByteArray(0), key, encVersion), key, encVersion))
+        assertArrayEquals(
+            ByteArray(0),
+            LibraryCrypto.decrypt(LibraryCrypto.encrypt(ByteArray(0), key, encVersion), key, encVersion),
+        )
     }
 
     @Test

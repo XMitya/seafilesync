@@ -44,7 +44,8 @@ pinned to Adoptium: AGP's JdkImageTransform runs `jlink` against the Android pla
 
 ## Releasing
 
-Every push to `main` and every pull request runs the unit tests and builds a debug APK
+Every push to `main` and every pull request runs `check` -- unit tests, ktlint, Android lint
+and the Kover coverage gate -- and builds a debug APK
 (`.github/workflows/ci.yml`). A release is a tag:
 
 ```

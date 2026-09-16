@@ -22,7 +22,12 @@ object ConflictNaming {
     private val FORMAT: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MMM-d-HH-mm-ss", Locale.ENGLISH)
 
-    fun conflictName(originalName: String, modifier: String, atMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    fun conflictName(
+        originalName: String,
+        modifier: String,
+        atMillis: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
         val timestamp = FORMAT.format(Instant.ofEpochMilli(atMillis).atZone(zone))
         val marker = if (modifier.isEmpty()) {
             "(SFConflict $timestamp)"

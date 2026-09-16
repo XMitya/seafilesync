@@ -18,7 +18,9 @@ import com.xmitya.seafilesync.sync.SyncStatus
  * It is not decoration. A dataSync foreground service that cannot post a notification is stopped
  * by the system, so this is what keeps syncing alive in the background.
  */
-class SyncNotifications(private val context: Context) {
+class SyncNotifications(
+    private val context: Context,
+) {
 
     private val manager = context.getSystemService(NotificationManager::class.java)
 
@@ -38,7 +40,8 @@ class SyncNotifications(private val context: Context) {
 
     fun build(status: SyncStatus): Notification {
         val active = status.activeRepos.values.firstOrNull()
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat
+            .Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_sync)
             .setColor(context.getColor(R.color.brand_amber))
             .setContentTitle(context.getString(R.string.app_name))
@@ -59,16 +62,14 @@ class SyncNotifications(private val context: Context) {
                     R.string.notification_syncing,
                     active.name,
                     active.currentPath?.substringAfterLast('/').orEmpty(),
-                )
-            )
-            .apply {
+                ),
+            ).apply {
                 if (fraction == null) {
                     setProgress(0, 0, true)
                 } else {
                     setProgress(PROGRESS_SCALE, (fraction * PROGRESS_SCALE).toInt(), false)
                 }
-            }
-            .build()
+            }.build()
     }
 
     fun update(status: SyncStatus) {

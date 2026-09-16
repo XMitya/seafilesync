@@ -53,8 +53,15 @@ class SeafileApiTest {
         val body = request.body.readUtf8()
         // All of platform, device_id and device_name must be present together, or the server
         // falls back to a v1 token and the device is never registered.
-        for (field in listOf("username", "password", "platform", "device_id", "device_name",
-                             "client_version", "platform_version")) {
+        for (field in listOf(
+            "username",
+            "password",
+            "platform",
+            "device_id",
+            "device_name",
+            "client_version",
+            "platform_version",
+        )) {
             assertTrue("missing form field $field", body.contains("name=\"$field\""))
         }
         assertTrue(body.contains("android"))
@@ -79,8 +86,11 @@ class SeafileApiTest {
 
     @Test
     fun `a two-factor challenge is distinguishable from bad credentials`() = runTest {
-        enqueue("""{"non_field_errors":["Two factor auth token is missing."]}""", code = 400,
-            "X-Seafile-OTP" to "required")
+        enqueue(
+            """{"non_field_errors":["Two factor auth token is missing."]}""",
+            code = 400,
+            "X-Seafile-OTP" to "required",
+        )
 
         assertFailsWith<SeafileException.TwoFactorRequired> { login() }
     }

@@ -21,10 +21,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -115,26 +115,26 @@ fun LibrariesScreen(
             }
 
             Box(Modifier.fillMaxSize()) {
-            when {
-                state.isRefreshing && state.libraries.isEmpty() ->
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                when {
+                    state.isRefreshing && state.libraries.isEmpty() ->
+                        CircularProgressIndicator(Modifier.align(Alignment.Center))
 
-                state.libraries.isEmpty() ->
-                    Text(
-                        text = stringResource(R.string.libraries_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                    )
+                    state.libraries.isEmpty() ->
+                        Text(
+                            text = stringResource(R.string.libraries_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        )
 
-                else -> LazyColumn(Modifier.fillMaxSize()) {
-                    item { header() }
-                    items(state.libraries, key = { it.id }) { library ->
-                        LibraryRow(library, onClick = { selected = library })
-                        HorizontalDivider()
+                    else -> LazyColumn(Modifier.fillMaxSize()) {
+                        item { header() }
+                        items(state.libraries, key = { it.id }) { library ->
+                            LibraryRow(library, onClick = { selected = library })
+                            HorizontalDivider()
+                        }
                     }
                 }
-            }
             }
         }
     }
@@ -154,8 +154,14 @@ fun LibrariesScreen(
                     if (library.needsPassword) askingPasswordFor = library else onSync(library, null)
                 },
                 // Stopping is the one action that can look destructive, so it is confirmed.
-                onStopSyncing = { selected = null; confirmingStopFor = library },
-                onRetry = { selected = null; onRetry(library) },
+                onStopSyncing = {
+                    selected = null
+                    confirmingStopFor = library
+                },
+                onRetry = {
+                    selected = null
+                    onRetry(library)
+                },
             )
         }
     }
@@ -164,7 +170,10 @@ fun LibrariesScreen(
         LibraryPasswordDialog(
             libraryName = library.name,
             onDismiss = { askingPasswordFor = null },
-            onConfirm = { password -> askingPasswordFor = null; onSync(library, password) },
+            onConfirm = { password ->
+                askingPasswordFor = null
+                onSync(library, password)
+            },
         )
     }
 
@@ -174,7 +183,10 @@ fun LibrariesScreen(
             title = { Text(stringResource(R.string.library_stop_confirm_title, library.name)) },
             text = { Text(stringResource(R.string.library_stop_confirm_message)) },
             confirmButton = {
-                TextButton(onClick = { confirmingStopFor = null; onStopSyncing(library) }) {
+                TextButton(onClick = {
+                    confirmingStopFor = null
+                    onStopSyncing(library)
+                }) {
                     Text(stringResource(R.string.library_stop_confirm_action))
                 }
             },
@@ -214,7 +226,7 @@ private fun LibraryRow(library: LibraryUi, onClick: () -> Unit) {
             .fillMaxWidth()
             .testTag(LIBRARY_ROW_TAG)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

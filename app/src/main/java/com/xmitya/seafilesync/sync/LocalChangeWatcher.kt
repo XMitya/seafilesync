@@ -85,9 +85,14 @@ class LocalChangeWatcher(
         val queue = ArrayDeque(listOf(root))
         while (queue.isNotEmpty() && found.size <= MAX_WATCHES) {
             val directory = queue.removeFirst()
-            directory.listFiles().orEmpty()
+            directory
+                .listFiles()
+                .orEmpty()
                 .filter { it.isDirectory && !LocalTreeBuilder.isAlwaysIgnored(it) }
-                .forEach { found += it; queue += it }
+                .forEach {
+                    found += it
+                    queue += it
+                }
         }
         return found
     }

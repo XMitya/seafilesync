@@ -13,9 +13,15 @@ import java.io.File
  *
  * Kept free of Android UI types so it can be unit tested against a temporary directory.
  */
-class DirectoryBrowser(private val roots: List<File> = defaultRoots()) {
+class DirectoryBrowser(
+    private val roots: List<File> = defaultRoots(),
+) {
 
-    data class Entry(val file: File, val name: String, val childDirectoryCount: Int)
+    data class Entry(
+        val file: File,
+        val name: String,
+        val childDirectoryCount: Int,
+    )
 
     data class Listing(
         val current: File,
@@ -27,7 +33,9 @@ class DirectoryBrowser(private val roots: List<File> = defaultRoots()) {
     fun initialDirectory(): File = roots.firstOrNull { it.isDirectory } ?: File("/")
 
     fun list(directory: File): Listing {
-        val children = directory.listFiles().orEmpty()
+        val children = directory
+            .listFiles()
+            .orEmpty()
             .filter { it.isDirectory && !it.isHidden }
             .sortedBy { it.name.lowercase() }
             .map { Entry(it, it.name, it.listFiles().orEmpty().count { child -> child.isDirectory }) }

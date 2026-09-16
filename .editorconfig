@@ -1,0 +1,35 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 4
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+# ktlint_official, because that is the style this code is already written in: a trailing comma on
+# every wrapped list and one parameter per line. intellij_idea forbids the trailing comma and
+# collapses those lists onto a single line, which would reflow the codebase rather than tidy it.
+ktlint_code_style = ktlint_official
+# The code already sits well inside this: the 99th percentile line is 102 characters.
+max_line_length = 120
+
+# Composables are PascalCase by convention and JUnit names are backticked sentences. Both are
+# deliberate, so the naming rule is told about them rather than the names bent to satisfy it.
+ktlint_function_naming_ignore_when_annotated_with = Composable, Test
+
+# Three ktlint_official rules are off because they fight choices this codebase makes
+# consistently, and following them would have meant reformatting most files to no benefit:
+#
+#   multiline-expression-wrapping  rewrites every `fun test() = runTest { ... }` into an
+#                                  assignment on its own line, indenting every coroutine test
+#                                  body one level deeper. That alone was ~1100 changed lines.
+#   function-signature             re-wraps signatures that are already wrapped readably, and
+#                                  pulls short expression bodies up onto 118-character lines.
+#   no-empty-first-line-in-class-body  strips the blank line after a class declaration, which
+#                                  this code uses to separate the signature from the body.
+ktlint_standard_multiline-expression-wrapping = disabled
+ktlint_standard_function-signature = disabled
+ktlint_standard_no-empty-first-line-in-class-body = disabled

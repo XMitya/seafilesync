@@ -179,7 +179,10 @@ fun LoginScreen(
                 label = { Text(stringResource(R.string.login_otp)) },
                 singleLine = true,
                 enabled = !state.isSubmitting,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
+                    imeAction = ImeAction.Done,
+                ),
                 modifier = Modifier.fillMaxWidth().testTag(LOGIN_OTP_TAG),
             )
         }

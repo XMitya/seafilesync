@@ -1,12 +1,12 @@
 package com.xmitya.seafilesync.sync
 
+import com.xmitya.seafilesync.data.crypto.LibraryCipher
+import com.xmitya.seafilesync.data.fs.CdcChunker
 import com.xmitya.seafilesync.data.fs.FsObject
 import com.xmitya.seafilesync.data.fs.ObjectId
 import com.xmitya.seafilesync.data.fs.SeafDir
 import com.xmitya.seafilesync.data.fs.SeafDirent
 import com.xmitya.seafilesync.data.fs.SeafFile
-import com.xmitya.seafilesync.data.crypto.LibraryCipher
-import com.xmitya.seafilesync.data.fs.CdcChunker
 import java.io.File
 
 /**
@@ -69,7 +69,9 @@ data class LocalTree(
  * correct on the wire; it only gives up dedup against blocks the desktop client cut differently.
  * Rabin chunking is a later optimisation, not a correctness requirement.
  */
-class LocalTreeBuilder(private val chunker: CdcChunker = CdcChunker()) {
+class LocalTreeBuilder(
+    private val chunker: CdcChunker = CdcChunker(),
+) {
 
     fun build(
         root: File,

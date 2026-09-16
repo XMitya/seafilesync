@@ -7,15 +7,19 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /** The key and IV a library's blocks are encrypted with. */
-data class LibraryKey(val key: ByteArray, val iv: ByteArray) {
+data class LibraryKey(
+    val key: ByteArray,
+    val iv: ByteArray,
+) {
     override fun equals(other: Any?): Boolean = this === other ||
         (other is LibraryKey && key.contentEquals(other.key) && iv.contentEquals(other.iv))
 
     override fun hashCode(): Int = 31 * key.contentHashCode() + iv.contentHashCode()
 }
 
-class UnsupportedEncryptionException(version: Int) :
-    GeneralSecurityException("Encrypted library version $version is not supported")
+class UnsupportedEncryptionException(
+    version: Int,
+) : GeneralSecurityException("Encrypted library version $version is not supported")
 
 class WrongLibraryPasswordException : GeneralSecurityException("Wrong library password")
 
@@ -37,7 +41,14 @@ object LibraryCrypto {
      * salt per repo would be better, which is what version 3 introduced.
      */
     private val LEGACY_SALT = byteArrayOf(
-        0xda.toByte(), 0x90.toByte(), 0x45, 0xc3.toByte(), 0x06, 0xc7.toByte(), 0xcc.toByte(), 0x26,
+        0xda.toByte(),
+        0x90.toByte(),
+        0x45,
+        0xc3.toByte(),
+        0x06,
+        0xc7.toByte(),
+        0xcc.toByte(),
+        0x26,
     )
 
     private const val KEY_ITERATIONS = 1000
@@ -70,7 +81,8 @@ object LibraryCrypto {
      */
     fun magic(repoId: String, password: String, version: Int, repoSaltHex: String): String =
         deriveKey("$repoId$password".toByteArray(Charsets.UTF_8), version, repoSaltHex)
-            .key.toHex()
+            .key
+            .toHex()
 
     /**
      * Checks the password locally, against the magic the server already published. No request,
@@ -140,12 +152,14 @@ object LibraryCrypto {
 
         while (written < lengthBytes) {
             mac.update(salt)
-            mac.update(byteArrayOf(
-                (blockIndex ushr 24).toByte(),
-                (blockIndex ushr 16).toByte(),
-                (blockIndex ushr 8).toByte(),
-                blockIndex.toByte(),
-            ))
+            mac.update(
+                byteArrayOf(
+                    (blockIndex ushr 24).toByte(),
+                    (blockIndex ushr 16).toByte(),
+                    (blockIndex ushr 8).toByte(),
+                    blockIndex.toByte(),
+                ),
+            )
             var u = mac.doFinal()
             val accumulated = u.copyOf()
             repeat(iterations - 1) {

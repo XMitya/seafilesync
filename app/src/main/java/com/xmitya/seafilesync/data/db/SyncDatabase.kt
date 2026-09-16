@@ -47,7 +47,7 @@ interface SyncedRepoDao {
 
     @Query(
         "UPDATE synced_repo SET lastSyncedCommitId = :commitId, lastSyncedAtMillis = :atMillis, " +
-            "status = '${SyncedRepoEntity.STATUS_IDLE}', errorMessage = NULL WHERE repoId = :repoId"
+            "status = '${SyncedRepoEntity.STATUS_IDLE}', errorMessage = NULL WHERE repoId = :repoId",
     )
     suspend fun markSynced(repoId: String, commitId: String, atMillis: Long)
 
@@ -114,7 +114,9 @@ interface PendingBlockDao {
 abstract class SyncDatabase : RoomDatabase() {
 
     abstract fun syncedRepos(): SyncedRepoDao
+
     abstract fun fileIndex(): FileIndexDao
+
     abstract fun pendingBlocks(): PendingBlockDao
 
     companion object {

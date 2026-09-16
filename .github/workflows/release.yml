@@ -72,7 +72,7 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: >
-          ./gradlew :app:testDebugUnitTest :app:assembleRelease --stacktrace
+          ./gradlew :app:check :app:assembleRelease --stacktrace
           -PversionName=${{ steps.version.outputs.name }}
           -PversionCode=${{ steps.version.outputs.code }}
 

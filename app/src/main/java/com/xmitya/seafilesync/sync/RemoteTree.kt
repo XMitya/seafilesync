@@ -31,7 +31,10 @@ data class RemoteSnapshot(
  * whatever was asked for, so a batch can come back short and the remainder has to be re-requested
  * rather than assumed missing.
  */
-class RemoteTreeReader(private val api: SeafHttpApi, private val batchSize: Int = DEFAULT_BATCH) {
+class RemoteTreeReader(
+    private val api: SeafHttpApi,
+    private val batchSize: Int = DEFAULT_BATCH,
+) {
 
     suspend fun read(token: String, repoId: String, commitId: String, rootId: String): RemoteSnapshot {
         val files = mutableMapOf<String, RemoteFile>()
@@ -50,7 +53,8 @@ class RemoteTreeReader(private val api: SeafHttpApi, private val batchSize: Int 
         // time, which matters on trees that are wide rather than deep.
         var frontier = listOf(rootId to "")
         while (frontier.isNotEmpty()) {
-            val needed = frontier.map { it.first }
+            val needed = frontier
+                .map { it.first }
                 .filterNot { it == EMPTY_OBJECT_ID || objects.containsKey(it) }
                 .distinct()
             fetch(token, repoId, needed).forEach { (id, obj) -> objects[id] = obj }

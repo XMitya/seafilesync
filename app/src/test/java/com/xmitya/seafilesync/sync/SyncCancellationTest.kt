@@ -24,10 +24,10 @@ import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import okio.Buffer
 import org.junit.After
-import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -49,7 +49,8 @@ class SyncCancellationTest {
 
     private val repoId = "79dc614e-d7f4-47a5-8bcc-10400a0a08cb"
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val database = Room.inMemoryDatabaseBuilder(context, SyncDatabase::class.java)
+    private val database = Room
+        .inMemoryDatabaseBuilder(context, SyncDatabase::class.java)
         .allowMainThreadQueries()
         .build()
 
@@ -77,7 +78,8 @@ class SyncCancellationTest {
         start()
     }
 
-    private val client = OkHttpClient.Builder()
+    private val client = OkHttpClient
+        .Builder()
         // Long on purpose: if cancellation did not work, the test would wait this out instead of
         // finishing, which is what distinguishes a real stop from a timeout.
         .readTimeout(1, TimeUnit.MINUTES)
@@ -85,6 +87,7 @@ class SyncCancellationTest {
 
     private object PlainCipher : TokenCipher {
         override fun encrypt(plaintext: String) = plaintext
+
         override fun decrypt(ciphertext: String) = ciphertext
     }
 
