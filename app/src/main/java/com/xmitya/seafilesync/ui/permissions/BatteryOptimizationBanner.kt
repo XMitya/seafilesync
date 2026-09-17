@@ -87,7 +87,7 @@ fun BatteryOptimizationBanner(modifier: Modifier = Modifier) {
                         Intent(
                             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                             Uri.fromParts("package", context.packageName, null),
-                        )
+                        ),
                     )
                 }) {
                     Text(stringResource(R.string.battery_allow))

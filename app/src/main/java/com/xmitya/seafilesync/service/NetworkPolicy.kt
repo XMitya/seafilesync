@@ -24,7 +24,9 @@ data class NetworkState(
  * charged by the byte, and the system already knows which is which. Asking about the transport
  * would get those cases wrong in the direction that costs the user money.
  */
-class NetworkPolicy(context: Context) {
+class NetworkPolicy(
+    context: Context,
+) {
 
     private val manager = context.getSystemService(ConnectivityManager::class.java)
 

@@ -26,7 +26,10 @@ object ObjectPack {
      */
     const val MAX_RESPONSE_BYTES = 1 shl 20
 
-    data class Entry(val id: String, val json: ByteArray) {
+    data class Entry(
+        val id: String,
+        val json: ByteArray,
+    ) {
         // Generated equals/hashCode would compare the array by identity.
         override fun equals(other: Any?): Boolean =
             this === other || (other is Entry && id == other.id && json.contentEquals(other.json))
@@ -60,7 +63,7 @@ object ObjectPack {
                     (compressed.size ushr 16).toByte(),
                     (compressed.size ushr 8).toByte(),
                     compressed.size.toByte(),
-                )
+                ),
             )
             output.write(compressed)
         }

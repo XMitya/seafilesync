@@ -14,10 +14,10 @@ import com.xmitya.seafilesync.ui.libraries.LibrariesUiState
 import com.xmitya.seafilesync.ui.libraries.LibraryUi
 import com.xmitya.seafilesync.ui.libraries.SyncState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,6 +26,7 @@ import java.io.IOException
 /** Where the user currently is. Only three places exist, so this beats a navigation graph. */
 sealed interface Destination {
     data object Loading : Destination
+
     data object Login : Destination
 
     /**
@@ -40,15 +41,47 @@ sealed interface Destination {
 }
 
 data class LoginUiState(
+    /** The host alone: the scheme lives in [useHttps] so the two cannot disagree. */
     val serverUrl: String = "",
     val email: String = "",
     val password: String = "",
     val otp: String = "",
     /** Shown only after the server has asked for a code, so the field is not there by default. */
     val needsOtp: Boolean = false,
+    val useHttps: Boolean = true,
+    val allowInsecureTls: Boolean = false,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+
+    /** What actually gets dialled: the field holds the host, the selector holds the scheme. */
+    val fullServerUrl: String
+        get() = "${if (useHttps) "https" else "http"}://${serverUrl.trim().trimEnd('/')}"
+
+    /**
+     * The one place that decides whether certificates are checked. Over http there is no
+     * certificate to skip, so the exemption cannot leak out of the state it was meant for.
+     */
+    val skipCertificateCheck: Boolean get() = useHttps && allowInsecureTls
+}
+
+private const val HTTPS_PREFIX = "https://"
+private const val HTTP_PREFIX = "http://"
+
+/**
+ * Moves a scheme the user typed or pasted into [LoginUiState.useHttps], leaving the field with
+ * the host alone. Pasting a whole URL is the normal way to fill this in, and without this the
+ * field and the scheme selector would show different things.
+ */
+internal fun LoginUiState.withTypedServerUrl(typed: String): LoginUiState = when {
+    typed.startsWith(HTTPS_PREFIX, ignoreCase = true) ->
+        copy(serverUrl = typed.drop(HTTPS_PREFIX.length), useHttps = true)
+
+    typed.startsWith(HTTP_PREFIX, ignoreCase = true) ->
+        copy(serverUrl = typed.drop(HTTP_PREFIX.length), useHttps = false, allowInsecureTls = false)
+
+    else -> copy(serverUrl = typed)
+}
 
 class MainViewModel(
     private val container: AppContainer,
@@ -160,6 +193,15 @@ class MainViewModel(
         viewModelScope.launch { container.settings.setWifiOnly(value) }
     }
 
+    fun setInsecureTls(value: Boolean) {
+        viewModelScope.launch {
+            container.accountStore.updateInsecureTls(value)
+            // _account is only filled in openSettings, so without this the switch would show the
+            // old value until the screen was opened again.
+            _account.update { it?.copy(allowInsecureTls = value) }
+        }
+    }
+
     fun setPollInterval(seconds: Long) {
         viewModelScope.launch { container.settings.setPollInterval(seconds) }
     }
@@ -168,7 +210,12 @@ class MainViewModel(
     val logSize: StateFlow<Long> = _logSize.asStateFlow()
 
     fun refreshLogSize() {
-        viewModelScope.launch { _logSize.value = container.log.read().length.toLong() }
+        viewModelScope.launch {
+            _logSize.value = container.log
+                .read()
+                .length
+                .toLong()
+        }
     }
 
     fun clearLog() {
@@ -178,9 +225,22 @@ class MainViewModel(
         }
     }
 
-    fun onServerUrlChanged(value: String) = _login.update { it.copy(serverUrl = value, errorMessage = null) }
+    fun onServerUrlChanged(value: String) =
+        _login.update { it.withTypedServerUrl(value).copy(errorMessage = null) }
+
+    fun onUseHttpsChanged(value: Boolean) = _login.update {
+        // Dropping the exemption on the way to http stops a later switch back to https from
+        // silently restoring a setting that was not on screen while it changed.
+        it.copy(useHttps = value, allowInsecureTls = it.allowInsecureTls && value, errorMessage = null)
+    }
+
+    fun onAllowInsecureTlsChanged(value: Boolean) =
+        _login.update { it.copy(allowInsecureTls = value, errorMessage = null) }
+
     fun onEmailChanged(value: String) = _login.update { it.copy(email = value, errorMessage = null) }
+
     fun onPasswordChanged(value: String) = _login.update { it.copy(password = value, errorMessage = null) }
+
     fun onOtpChanged(value: String) = _login.update { it.copy(otp = value, errorMessage = null) }
 
     fun signIn() {
@@ -190,7 +250,20 @@ class MainViewModel(
 
         viewModelScope.launch {
             try {
-                val api = container.seafileApi(form.serverUrl)
+                val serverUrl = form.fullServerUrl
+                // Only the parse is guarded. SeafileApi turns the address into an HttpUrl in its
+                // constructor and rejects anything that is not one -- a space, a typo, a stray
+                // character -- and okhttp's own message reads like a parser error. Widening this
+                // to the whole call would also swallow the device-id require() inside login(),
+                // which is a bug in this app rather than something the user typed.
+                val api = try {
+                    container.seafileApi(serverUrl, form.skipCertificateCheck)
+                } catch (malformed: IllegalArgumentException) {
+                    _login.update {
+                        it.copy(isSubmitting = false, errorMessage = "Check the server address")
+                    }
+                    return@launch
+                }
                 val token = api.login(
                     username = form.email.trim(),
                     password = form.password,
@@ -201,11 +274,12 @@ class MainViewModel(
                     otp = form.otp.takeIf { form.needsOtp && it.isNotBlank() },
                 )
                 pendingAccount = Account(
-                    serverUrl = form.serverUrl.trim(),
+                    serverUrl = serverUrl,
                     email = form.email.trim(),
                     token = token,
                     syncRoot = "",
                     deviceId = container.deviceId,
+                    allowInsecureTls = form.skipCertificateCheck,
                 )
                 _login.update { it.copy(isSubmitting = false, password = "") }
                 _destination.value = Destination.ChooseSyncFolder
@@ -236,11 +310,17 @@ class MainViewModel(
                 return@launch
             }
             _libraries.update {
-                it.copy(isRefreshing = true, errorMessage = null,
-                    accountEmail = account.email, syncRoot = account.syncRoot)
+                it.copy(
+                    isRefreshing = true,
+                    errorMessage = null,
+                    accountEmail = account.email,
+                    syncRoot = account.syncRoot,
+                )
             }
             try {
-                val repos = container.seafileApi(account.serverUrl).repos(account.token)
+                val repos = container
+                    .seafileApi(account.serverUrl, account.allowInsecureTls)
+                    .repos(account.token)
                 remoteLibraries.value = repos.map { repo ->
                     LibraryUi(
                         id = repo.id,

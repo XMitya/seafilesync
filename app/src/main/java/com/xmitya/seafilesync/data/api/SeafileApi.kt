@@ -53,7 +53,9 @@ class SeafileApi(
         require(ANDROID_DEVICE_ID.matches(deviceId)) {
             "device_id must be 1..16 lowercase hex characters for the android platform, was '$deviceId'"
         }
-        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+        val body = MultipartBody
+            .Builder()
+            .setType(MultipartBody.FORM)
             .addFormDataPart("username", username)
             .addFormDataPart("password", password)
             .addFormDataPart("platform", PLATFORM)
@@ -63,7 +65,8 @@ class SeafileApi(
             .addFormDataPart("platform_version", platformVersion)
             .build()
 
-        val request = Request.Builder()
+        val request = Request
+            .Builder()
             .url(baseUrl.newBuilder().addPathSegments("api2/auth-token/").build())
             .post(body)
             .apply { otp?.let { header("X-Seafile-OTP", it) } }
@@ -92,7 +95,8 @@ class SeafileApi(
     }
 
     suspend fun getText(path: String, token: String? = null): String {
-        val request = Request.Builder()
+        val request = Request
+            .Builder()
             .url(baseUrl.newBuilder().addPathSegments(path).build())
             .apply { token?.let { header("Authorization", "Token $it") } }
             .build()
@@ -111,10 +115,13 @@ class SeafileApi(
      * by this point the token is already rejected.
      */
     suspend fun acknowledgeWipe(token: String) {
-        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+        val body = MultipartBody
+            .Builder()
+            .setType(MultipartBody.FORM)
             .addFormDataPart("token", token)
             .build()
-        val request = Request.Builder()
+        val request = Request
+            .Builder()
             .url(baseUrl.newBuilder().addPathSegments("api2/device-wiped/").build())
             .post(body)
             .build()
@@ -136,12 +143,21 @@ class SeafileApi(
     private fun Response.isWiped(): Boolean = header("X-Seafile-Wiped").equals("true", ignoreCase = true)
 
     private fun nonFieldError(body: String): String? = runCatching {
-        SeafJson.parser.parseToJsonElement(body).jsonObject["non_field_errors"]
-            ?.jsonArray?.firstOrNull()?.jsonPrimitive?.content
+        SeafJson.parser
+            .parseToJsonElement(body)
+            .jsonObject["non_field_errors"]
+            ?.jsonArray
+            ?.firstOrNull()
+            ?.jsonPrimitive
+            ?.content
     }.getOrNull()
 
     private fun errorMessage(body: String): String = runCatching {
-        SeafJson.parser.parseToJsonElement(body).jsonObject["error_msg"]?.jsonPrimitive?.content
+        SeafJson.parser
+            .parseToJsonElement(body)
+            .jsonObject["error_msg"]
+            ?.jsonPrimitive
+            ?.content
     }.getOrNull() ?: body.take(ERROR_BODY_MAX)
 
     companion object {

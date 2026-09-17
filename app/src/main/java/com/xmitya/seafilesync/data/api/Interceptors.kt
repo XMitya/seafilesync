@@ -10,9 +10,17 @@ import kotlin.math.min
  * Identifies the client the way the desktop daemon does. The server records this against the
  * device entry, so a recognisable string is what makes a session identifiable in the web UI.
  */
-class UserAgentInterceptor(private val userAgent: String) : Interceptor {
+class UserAgentInterceptor(
+    private val userAgent: String,
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response =
-        chain.proceed(chain.request().newBuilder().header("User-Agent", userAgent).build())
+        chain.proceed(
+            chain
+                .request()
+                .newBuilder()
+                .header("User-Agent", userAgent)
+                .build(),
+        )
 }
 
 /**

@@ -20,7 +20,10 @@ import java.util.concurrent.TimeUnit
  * actually keeps syncing alive is the battery-optimisation exemption; this only catches the case
  * where the service died and nothing else would notice.
  */
-class SyncWatchdogWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+class SyncWatchdogWorker(
+    context: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         val container = applicationContext.appContainer
@@ -29,7 +32,13 @@ class SyncWatchdogWorker(context: Context, params: WorkerParameters) : Coroutine
             WorkManager.getInstance(applicationContext).cancelUniqueWork(WORK_NAME)
             return Result.success()
         }
-        if (container.database.syncedRepos().all().isEmpty()) return Result.success()
+        if (container.database
+                .syncedRepos()
+                .all()
+                .isEmpty()
+        ) {
+            return Result.success()
+        }
 
         SyncForegroundService.start(applicationContext)
         return Result.success()
@@ -41,11 +50,11 @@ class SyncWatchdogWorker(context: Context, params: WorkerParameters) : Coroutine
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWatchdogWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(
-                    Constraints.Builder()
+                    Constraints
+                        .Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
-                .build()
+                        .build(),
+                ).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,

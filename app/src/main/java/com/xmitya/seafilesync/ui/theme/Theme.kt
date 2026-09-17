@@ -83,7 +83,7 @@ private val LightColorScheme = lightColorScheme(
 fun SeafileSyncTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
         dynamicColor -> {
@@ -98,6 +98,6 @@ fun SeafileSyncTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
+        content = content,
     )
 }

@@ -6,12 +6,19 @@ import com.xmitya.seafilesync.data.db.FileIndexEntity
 sealed interface SyncOperation {
     val path: String
 
-    data class CreateDirectory(override val path: String) : SyncOperation
+    data class CreateDirectory(
+        override val path: String,
+    ) : SyncOperation
 
-    data class DownloadFile(override val path: String, val remote: RemoteFile) : SyncOperation
+    data class DownloadFile(
+        override val path: String,
+        val remote: RemoteFile,
+    ) : SyncOperation
 
     /** The server deleted it and the local copy is untouched, so removing it loses nothing. */
-    data class DeleteFile(override val path: String) : SyncOperation
+    data class DeleteFile(
+        override val path: String,
+    ) : SyncOperation
 
     /**
      * Both sides changed the same file. The server's version takes the path and the local one is
@@ -27,10 +34,16 @@ sealed interface SyncOperation {
      * The local file already holds exactly the server's content, so nothing transfers; it just
      * needs recording in the index as synced.
      */
-    data class AdoptLocal(override val path: String, val remote: RemoteFile) : SyncOperation
+    data class AdoptLocal(
+        override val path: String,
+        val remote: RemoteFile,
+    ) : SyncOperation
 
     /** Something that cannot be resolved automatically and is reported instead. */
-    data class ConflictSkipped(override val path: String, val reason: String) : SyncOperation
+    data class ConflictSkipped(
+        override val path: String,
+        val reason: String,
+    ) : SyncOperation
 }
 
 data class SyncPlan(
@@ -92,7 +105,9 @@ object SyncPlanner {
 
                 recorded == null -> {
                     operations += SyncOperation.ResolveConflict(
-                        path, file, ConflictNaming.conflictPath(path, modifier, nowMillis),
+                        path,
+                        file,
+                        ConflictNaming.conflictPath(path, modifier, nowMillis),
                     )
                     bytes += file.sizeBytes
                 }
@@ -111,7 +126,9 @@ object SyncPlanner {
                 // beside it rather than discarded.
                 local == LocalState.Modified && recorded.fileId != file.fileId -> {
                     operations += SyncOperation.ResolveConflict(
-                        path, file, ConflictNaming.conflictPath(path, modifier, nowMillis),
+                        path,
+                        file,
+                        ConflictNaming.conflictPath(path, modifier, nowMillis),
                     )
                     bytes += file.sizeBytes
                 }
@@ -137,7 +154,8 @@ object SyncPlanner {
                 // Deleted remotely but edited locally. The edit is kept and the upload pass will
                 // put it back on the server, which is the safer of the two possible surprises.
                 LocalState.Modified -> operations += SyncOperation.ConflictSkipped(
-                    recorded.path, "deleted on the server but changed locally, keeping the local copy"
+                    recorded.path,
+                    "deleted on the server but changed locally, keeping the local copy",
                 )
             }
         }

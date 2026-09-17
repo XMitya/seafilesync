@@ -1,5 +1,7 @@
 package com.xmitya.seafilesync.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -8,21 +10,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.xmitya.seafilesync.R
+import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.data.fs.DirectoryBrowser
 import com.xmitya.seafilesync.ui.folder.SyncFolderScreen
 import com.xmitya.seafilesync.ui.libraries.LibrariesScreen
 import com.xmitya.seafilesync.ui.login.LoginScreen
 import com.xmitya.seafilesync.ui.permissions.AskForNotificationPermission
 import com.xmitya.seafilesync.ui.permissions.BatteryOptimizationBanner
-import com.xmitya.seafilesync.ui.settings.SettingsScreen
-import android.content.Context
-import android.content.Intent
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.FileProvider
-import com.xmitya.seafilesync.R
-import com.xmitya.seafilesync.app.appContainer
 import com.xmitya.seafilesync.ui.permissions.RequireAllFilesAccess
+import com.xmitya.seafilesync.ui.settings.SettingsScreen
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
@@ -38,6 +38,8 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             LoginScreen(
                 state = state,
                 onServerUrlChanged = viewModel::onServerUrlChanged,
+                onUseHttpsChanged = viewModel::onUseHttpsChanged,
+                onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,
                 onEmailChanged = viewModel::onEmailChanged,
                 onPasswordChanged = viewModel::onPasswordChanged,
                 onOtpChanged = viewModel::onOtpChanged,
@@ -82,7 +84,9 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 accountEmail = account?.email.orEmpty(),
                 serverUrl = account?.serverUrl.orEmpty(),
                 syncRoot = account?.syncRoot.orEmpty(),
+                allowInsecureTls = account?.allowInsecureTls == true,
                 onWifiOnlyChanged = viewModel::setWifiOnly,
+                onInsecureTlsChanged = viewModel::setInsecureTls,
                 onPollIntervalChanged = viewModel::setPollInterval,
                 onSignOut = viewModel::signOut,
                 onBack = viewModel::closeSettings,

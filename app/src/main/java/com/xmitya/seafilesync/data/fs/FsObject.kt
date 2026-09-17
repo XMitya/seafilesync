@@ -1,6 +1,5 @@
 package com.xmitya.seafilesync.data.fs
 
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -29,6 +28,7 @@ const val MODE_FILE = S_IFREG or 0x1A4
 const val MODE_DIR = S_IFDIR
 
 fun isRegular(mode: Int): Boolean = (mode and S_IFMT) == S_IFREG
+
 fun isDirectory(mode: Int): Boolean = (mode and S_IFMT) == S_IFDIR
 
 /**

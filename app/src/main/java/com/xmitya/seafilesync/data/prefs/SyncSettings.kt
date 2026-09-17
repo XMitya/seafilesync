@@ -26,7 +26,9 @@ data class SyncPreferences(
     }
 }
 
-class SyncSettings(private val dataStore: DataStore<Preferences>) {
+class SyncSettings(
+    private val dataStore: DataStore<Preferences>,
+) {
 
     val preferences: Flow<SyncPreferences> = dataStore.data.map {
         SyncPreferences(

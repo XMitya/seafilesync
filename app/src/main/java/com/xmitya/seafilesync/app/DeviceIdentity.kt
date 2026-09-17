@@ -19,7 +19,11 @@ object DeviceIdentity {
     @SuppressLint("HardwareIds")
     fun deviceId(context: Context): String {
         val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        val hex = androidId.orEmpty().lowercase().filter { it in "0123456789abcdef" }.take(16)
+        val hex = androidId
+            .orEmpty()
+            .lowercase()
+            .filter { it in "0123456789abcdef" }
+            .take(16)
         // A device that reports nothing usable still needs a stable, well-formed id.
         return hex.ifEmpty { fallbackId(context) }
     }

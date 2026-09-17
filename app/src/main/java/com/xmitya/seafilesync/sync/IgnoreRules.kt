@@ -10,7 +10,9 @@ import java.io.File
  * subset Seafile documents: one glob per line, `#` for comments, a trailing `/` for
  * directory-only rules, and a leading `/` to anchor at the library root.
  */
-class IgnoreRules private constructor(private val patterns: List<Pattern>) {
+class IgnoreRules private constructor(
+    private val patterns: List<Pattern>,
+) {
 
     private data class Pattern(
         val regex: Regex,
@@ -28,7 +30,8 @@ class IgnoreRules private constructor(private val patterns: List<Pattern>) {
                 pattern.regex.matches(path)
             } else {
                 // An unanchored rule matches at any depth, so "*.tmp" catches "a/b/c.tmp" too.
-                pattern.regex.matches(path) || path.split('/').any { pattern.regex.matches(it) } ||
+                pattern.regex.matches(path) ||
+                    path.split('/').any { pattern.regex.matches(it) } ||
                     generateSequence(path) { it.substringAfter('/', "").ifEmpty { null } }
                         .any { pattern.regex.matches(it) }
             }
@@ -46,7 +49,8 @@ class IgnoreRules private constructor(private val patterns: List<Pattern>) {
         }
 
         fun parse(text: String): IgnoreRules {
-            val patterns = text.lineSequence()
+            val patterns = text
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() && !it.startsWith("#") }
                 .map { line ->
@@ -54,8 +58,7 @@ class IgnoreRules private constructor(private val patterns: List<Pattern>) {
                     val anchored = line.startsWith("/")
                     val glob = line.trim('/')
                     Pattern(globToRegex(glob), directoryOnly, anchored || glob.contains('/'))
-                }
-                .toList()
+                }.toList()
             return IgnoreRules(patterns)
         }
 

@@ -32,7 +32,10 @@ import org.robolectric.RobolectricTestRunner
 class BuildStackSmokeTest {
 
     @Entity
-    data class Row(@PrimaryKey val id: Long, val name: String)
+    data class Row(
+        @PrimaryKey val id: Long,
+        val name: String,
+    )
 
     @Dao
     interface RowDao {
@@ -49,7 +52,9 @@ class BuildStackSmokeTest {
     }
 
     @Serializable
-    data class Payload(val token: String)
+    data class Payload(
+        val token: String,
+    )
 
     @Test
     fun `room generates a working dao`() = runTest {

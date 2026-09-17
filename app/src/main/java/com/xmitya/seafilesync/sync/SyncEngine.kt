@@ -3,13 +3,13 @@ package com.xmitya.seafilesync.sync
 import com.xmitya.seafilesync.app.SyncLog
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
+import com.xmitya.seafilesync.data.crypto.LibraryCipher
+import com.xmitya.seafilesync.data.crypto.LibraryCrypto
+import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
 import com.xmitya.seafilesync.data.db.FileIndexDao
 import com.xmitya.seafilesync.data.db.FileIndexEntity
 import com.xmitya.seafilesync.data.db.SyncedRepoDao
 import com.xmitya.seafilesync.data.db.SyncedRepoEntity
-import com.xmitya.seafilesync.data.crypto.LibraryCipher
-import com.xmitya.seafilesync.data.crypto.LibraryCrypto
-import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
 import com.xmitya.seafilesync.data.prefs.Account
 import com.xmitya.seafilesync.data.prefs.TokenCipher
 import kotlinx.coroutines.CancellationException
@@ -64,8 +64,8 @@ class SyncEngine(
      * when the engine is constructed -- on a fresh install nothing is signed in -- and reading
      * it eagerly meant blocking the main thread for a server URL that was still empty.
      */
-    private val apiFor: (serverUrl: String) -> SeafileApi,
-    private val seafHttpFor: (serverUrl: String) -> SeafHttpApi,
+    private val apiFor: (serverUrl: String, allowInsecureTls: Boolean) -> SeafileApi,
+    private val seafHttpFor: (serverUrl: String, allowInsecureTls: Boolean) -> SeafHttpApi,
     /** Protects the stored library password; the same Keystore key as the account token. */
     private val cipher: TokenCipher,
     private val log: SyncLog,
@@ -75,14 +75,20 @@ class SyncEngine(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
-    private class Session(val api: SeafileApi, val seafHttp: SeafHttpApi) {
+    private class Session(
+        val api: SeafileApi,
+        val seafHttp: SeafHttpApi,
+    ) {
         val treeReader = RemoteTreeReader(seafHttp)
         val downloader = Downloader(seafHttp)
         val uploader = Uploader(seafHttp)
     }
 
     private fun sessionFor(account: Account) =
-        Session(apiFor(account.serverUrl), seafHttpFor(account.serverUrl))
+        Session(
+            apiFor(account.serverUrl, account.allowInsecureTls),
+            seafHttpFor(account.serverUrl, account.allowInsecureTls),
+        )
 
     private val _status = MutableStateFlow(SyncStatus())
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
@@ -113,7 +119,8 @@ class SyncEngine(
         val localPath = File(account.syncRoot, name).path
         File(localPath).mkdirs()
 
-        val info = apiFor(account.serverUrl).downloadInfo(account.token, repoId)
+        val info = apiFor(account.serverUrl, account.allowInsecureTls)
+            .downloadInfo(account.token, repoId)
         if (info.isEncrypted) {
             val given = password ?: throw WrongLibraryPasswordException()
             // Checked locally against the magic the server already published, so the password
@@ -134,7 +141,7 @@ class SyncEngine(
                 randomKey = info.randomKey,
                 encSalt = info.salt,
                 encryptedPassword = password?.takeIf { info.isEncrypted }?.let(cipher::encrypt),
-            )
+            ),
         )
     }
 
@@ -188,12 +195,25 @@ class SyncEngine(
         repos.all().map { sync(account, it) }
 
     sealed interface SyncOutcome {
-        data class UpToDate(val repoId: String) : SyncOutcome
-        data class Synced(val repoId: String, val commitId: String, val downloaded: Int) : SyncOutcome
-        data class Failed(val repoId: String, val reason: String) : SyncOutcome
+        data class UpToDate(
+            val repoId: String,
+        ) : SyncOutcome
+
+        data class Synced(
+            val repoId: String,
+            val commitId: String,
+            val downloaded: Int,
+        ) : SyncOutcome
+
+        data class Failed(
+            val repoId: String,
+            val reason: String,
+        ) : SyncOutcome
 
         /** The user switched this library off while it was transferring. */
-        data class Stopped(val repoId: String) : SyncOutcome
+        data class Stopped(
+            val repoId: String,
+        ) : SyncOutcome
     }
 
     suspend fun sync(account: Account, repo: SyncedRepoEntity): SyncOutcome = lock.withLock {
@@ -239,7 +259,13 @@ class SyncEngine(
             // on the device forever.
             val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
             val pushed = pushLocalChanges(
-                session, account, repo, token, File(repo.localPath), headCommitId, commit.rootId,
+                session,
+                account,
+                repo,
+                token,
+                File(repo.localPath),
+                headCommitId,
+                commit.rootId,
             )
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_IDLE)
             return if (pushed == null) {
@@ -269,12 +295,14 @@ class SyncEngine(
 
         _status.update {
             it.copy(
-                activeRepos = it.activeRepos + (repo.repoId to RepoProgress(
-                    repoId = repo.repoId,
-                    name = repo.name,
-                    totalBytes = plan.bytesToDownload,
-                    filesRemaining = plan.operations.count { op -> op is SyncOperation.DownloadFile },
-                ))
+                activeRepos = it.activeRepos + (
+                    repo.repoId to RepoProgress(
+                        repoId = repo.repoId,
+                        name = repo.name,
+                        totalBytes = plan.bytesToDownload,
+                        filesRemaining = plan.operations.count { op -> op is SyncOperation.DownloadFile },
+                    )
+                ),
             )
         }
 
@@ -367,9 +395,11 @@ class SyncEngine(
 
         val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
         val added = tree.files.keys.filterNot { it in previous }
-        val modified = tree.files.filter { (path, entry) ->
-            previous[path]?.fileId?.let { it != entry.fileId } == true
-        }.keys.toList()
+        val modified = tree.files
+            .filter { (path, entry) ->
+                previous[path]?.fileId?.let { it != entry.fileId } == true
+            }.keys
+            .toList()
         val removed = previous.keys.filterNot { it in tree.files }
 
         val result = session.uploader.push(
@@ -403,7 +433,7 @@ class SyncEngine(
                     localModifiedMillis = onDisk.lastModified(),
                     blockIds = entry.blocks.map { it.id },
                 )
-            }
+            },
         )
         repos.markSynced(repo.repoId, head, clock())
         return head

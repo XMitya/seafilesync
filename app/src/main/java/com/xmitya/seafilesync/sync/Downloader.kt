@@ -18,7 +18,9 @@ import java.io.IOException
  *    or corrupted transfer is caught here instead of surfacing later as a file that silently
  *    differs from the server.
  */
-class Downloader(private val api: SeafHttpApi) {
+class Downloader(
+    private val api: SeafHttpApi,
+) {
 
     fun interface ProgressSink {
         fun onBytes(count: Long)
@@ -47,7 +49,7 @@ class Downloader(private val api: SeafHttpApi) {
                     val actual = ObjectId.ofBytes(stored)
                     if (actual != blockId) {
                         throw IOException(
-                            "Block $blockId for ${remote.path} hashed to $actual; transfer was corrupted"
+                            "Block $blockId for ${remote.path} hashed to $actual; transfer was corrupted",
                         )
                     }
                     progress.onBytes(stored.size.toLong())
@@ -58,7 +60,7 @@ class Downloader(private val api: SeafHttpApi) {
             // The recorded size is of the plaintext, which is what has just been written.
             if (temporary.length() != remote.sizeBytes) {
                 throw IOException(
-                    "Reassembled ${remote.path} is ${temporary.length()} bytes, expected ${remote.sizeBytes}"
+                    "Reassembled ${remote.path} is ${temporary.length()} bytes, expected ${remote.sizeBytes}",
                 )
             }
 

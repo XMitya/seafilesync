@@ -27,7 +27,10 @@ class CdcChunker(
     }
 
     /** Where one block sits in the file. */
-    data class Chunk(val offset: Long, val length: Int)
+    data class Chunk(
+        val offset: Long,
+        val length: Int,
+    )
 
     /**
      * Splits [input] into blocks, reporting each as it is found. Never holds more than [maxSize]
@@ -103,6 +106,7 @@ class CdcChunker(
         const val BLOCK_AVERAGE_SIZE = 1024 * 1024
         const val BLOCK_MAX_SIZE = 1024 * 1024 * 4
         const val WINDOW_SIZE = 48
+
         /**
          * Not a `const val`: folding `Int.toUInt()` at compile time crashes the Kotlin backend
          * (InterpreterMethodNotFoundError), so the unsigned type is declared outright.

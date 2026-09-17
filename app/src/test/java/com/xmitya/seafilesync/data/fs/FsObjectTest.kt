@@ -1,7 +1,6 @@
 package com.xmitya.seafilesync.data.fs
 
 import com.xmitya.seafilesync.data.api.ObjectPack
-import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,8 +60,10 @@ class FsObjectTest {
         // The server writes those two fields only for regular files. Emitting them for a
         // directory would silently change the parent's id.
         val json = SeafDirent.directory(id = "a".repeat(40), name = "docs", mtime = 42).toJson()
-        assertEquals("""{"id": "${"a".repeat(40)}", "mode": 16384, "mtime": 42, "name": "docs"}""",
-            SeafJson.canonicalize(json))
+        assertEquals(
+            """{"id": "${"a".repeat(40)}", "mode": 16384, "mtime": 42, "name": "docs"}""",
+            SeafJson.canonicalize(json),
+        )
     }
 
     @Test

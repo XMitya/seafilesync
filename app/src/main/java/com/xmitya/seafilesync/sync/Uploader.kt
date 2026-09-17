@@ -18,9 +18,15 @@ import java.io.IOException
  * reference them, then the commit that references the root, then the head pointer. Publishing the
  * head before its contents exist gives other clients a commit they cannot read.
  */
-class Uploader(private val api: SeafHttpApi) {
+class Uploader(
+    private val api: SeafHttpApi,
+) {
 
-    data class Result(val commitId: String, val blocksUploaded: Int, val objectsUploaded: Int)
+    data class Result(
+        val commitId: String,
+        val blocksUploaded: Int,
+        val objectsUploaded: Int,
+    )
 
     fun interface ProgressSink {
         fun onBytes(count: Long)
@@ -110,14 +116,16 @@ class Uploader(private val api: SeafHttpApi) {
         var uploaded = 0
         tree.objects.keys.chunked(CHECK_BATCH).forEach { batch ->
             val missing = api.missingFs(token, repoId, batch)
-            missing.mapNotNull { id ->
-                tree.objects[id]?.let { obj ->
-                    ObjectPack.Entry(id, SeafJson.canonicalize(obj.toJson()).toByteArray(Charsets.UTF_8))
+            missing
+                .mapNotNull { id ->
+                    tree.objects[id]?.let { obj ->
+                        ObjectPack.Entry(id, SeafJson.canonicalize(obj.toJson()).toByteArray(Charsets.UTF_8))
+                    }
+                }.chunked(SEND_BATCH)
+                .forEach { entries ->
+                    api.sendFs(token, repoId, entries)
+                    uploaded += entries.size
                 }
-            }.chunked(SEND_BATCH).forEach { entries ->
-                api.sendFs(token, repoId, entries)
-                uploaded += entries.size
-            }
         }
         return uploaded
     }
@@ -129,7 +137,10 @@ class Uploader(private val api: SeafHttpApi) {
         failure: SeafileException.BlocksMissing,
         progress: ProgressSink,
     ) {
-        val ids = OBJECT_ID.findAll(failure.body).map { it.value }.toList()
+        val ids = OBJECT_ID
+            .findAll(failure.body)
+            .map { it.value }
+            .toList()
             .ifEmpty { tree.blocks.keys.toList() }
         for (blockId in api.missingBlocks(token, repoId, ids)) {
             val block = tree.blocks[blockId] ?: continue
@@ -142,7 +153,7 @@ class Uploader(private val api: SeafHttpApi) {
     private fun commitIdFor(commit: CommitDto): String =
         ObjectId.ofBytes(
             "${commit.repoId}:${commit.rootId}:${commit.parentId}:${commit.ctime}:${commit.description}"
-                .toByteArray(Charsets.UTF_8)
+                .toByteArray(Charsets.UTF_8),
         )
 
     private companion object {

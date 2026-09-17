@@ -53,8 +53,15 @@ class SeafileApiTest {
         val body = request.body.readUtf8()
         // All of platform, device_id and device_name must be present together, or the server
         // falls back to a v1 token and the device is never registered.
-        for (field in listOf("username", "password", "platform", "device_id", "device_name",
-                             "client_version", "platform_version")) {
+        for (field in listOf(
+            "username",
+            "password",
+            "platform",
+            "device_id",
+            "device_name",
+            "client_version",
+            "platform_version",
+        )) {
             assertTrue("missing form field $field", body.contains("name=\"$field\""))
         }
         assertTrue(body.contains("android"))
@@ -79,8 +86,11 @@ class SeafileApiTest {
 
     @Test
     fun `a two-factor challenge is distinguishable from bad credentials`() = runTest {
-        enqueue("""{"non_field_errors":["Two factor auth token is missing."]}""", code = 400,
-            "X-Seafile-OTP" to "required")
+        enqueue(
+            """{"non_field_errors":["Two factor auth token is missing."]}""",
+            code = 400,
+            "X-Seafile-OTP" to "required",
+        )
 
         assertFailsWith<SeafileException.TwoFactorRequired> { login() }
     }
@@ -167,5 +177,12 @@ class SeafileApiTest {
         assertEquals(expected, SeafileApi.normalize("https://seafile.example.com").toString())
         assertEquals(expected, SeafileApi.normalize("  https://seafile.example.com/  ").toString())
         assertEquals("http://192.168.1.5:8000/", SeafileApi.normalize("http://192.168.1.5:8000").toString())
+    }
+
+    @Test
+    fun `an address that is not a url is rejected when the client is built`() {
+        // The sign-in screen relies on this happening in the constructor rather than at the first
+        // request, so a typo turns into a message on the form instead of a crash in the launch.
+        assertFailsWith<IllegalArgumentException> { SeafileApi("https://see file.example.com", OkHttpClient()) }
     }
 }

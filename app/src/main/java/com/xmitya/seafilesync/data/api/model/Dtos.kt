@@ -4,7 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AuthTokenDto(val token: String)
+data class AuthTokenDto(
+    val token: String,
+)
 
 @Serializable
 data class ServerInfoDto(

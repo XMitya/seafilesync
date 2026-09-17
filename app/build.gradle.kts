@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -81,7 +83,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -92,14 +93,56 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.tls)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     kspTest(libs.androidx.room.compiler)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // Nothing imports Espresso -- the instrumented tests drive Compose -- but it is what pins
+    // androidx.concurrent:concurrent-futures to the 1.1.0 the androidTest classpath is
+    // constrained to. Drop it and androidx.test.ext:junit pulls 1.2.0 and resolution fails.
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.kotlin.test)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                // Generated: nothing here was written by hand, so covering it measures nothing.
+                classes(
+                    "*.BuildConfig",
+                    "*.R",
+                    "*.R$*",
+                    "*_Impl",
+                    "*_Impl$*",
+                    "*ComposableSingletons*",
+                    "*$\$serializer",
+                )
+                // Composables are exercised by the instrumented tests, which CI does not run,
+                // and a JVM test cannot enter them at all. Counting them would just park a
+                // permanent ~800 uncoverable lines in the denominator.
+                annotatedBy("androidx.compose.runtime.Composable")
+            }
+        }
+
+        // A ratchet, not an aspiration. It sits just under where the suite actually is, so
+        // coverage cannot quietly fall, and it is meant to be raised as tests land -- 70% is
+        // the realistic target once MainViewModel and the sync engine are covered.
+        //
+        // Kover 0.9's rules take no filters of their own, so this cannot also hold the crypto
+        // and protocol packages (already 80-88%) to a higher bar in the same block; that would
+        // need a separate report variant.
+        // Kover wires koverVerify into `check` on its own, so `gradlew check` and CI fail on a
+        // regression rather than only reporting one. ktlint wires its check task up the same way.
+        verify {
+            rule("Overall line coverage") {
+                minBound(45)
+            }
+        }
+    }
 }

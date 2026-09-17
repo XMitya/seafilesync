@@ -72,7 +72,7 @@ fun RequireAllFilesAccess(modifier: Modifier = Modifier, content: @Composable ()
                 Intent(
                     Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                     Uri.fromParts("package", context.packageName, null),
-                )
+                ),
             )
         },
     )
@@ -87,7 +87,7 @@ fun RequireAllFilesAccess(modifier: Modifier = Modifier, content: @Composable ()
 fun AskForNotificationPermission() {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) { /* Declining is allowed; the service degrades rather than fails. */ }
 
     // Must be launched from an effect, not from the composable body. The launcher is only

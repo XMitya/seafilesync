@@ -7,7 +7,10 @@ package com.xmitya.seafilesync.data.crypto
  * ciphertext. So encryption happens before hashing on the way out, and verification happens
  * before decryption on the way in.
  */
-class LibraryCipher(private val key: LibraryKey, private val version: Int) {
+class LibraryCipher(
+    private val key: LibraryKey,
+    private val version: Int,
+) {
 
     fun encrypt(plaintext: ByteArray): ByteArray = LibraryCrypto.encrypt(plaintext, key, version)
 

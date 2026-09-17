@@ -5,12 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.xmitya.seafilesync.BuildConfig
+import com.xmitya.seafilesync.data.api.InsecureTrust
 import com.xmitya.seafilesync.data.api.RetryInterceptor
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
 import com.xmitya.seafilesync.data.api.UserAgentInterceptor
-import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.db.SyncDatabase
+import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.prefs.KeystoreTokenCipher
 import com.xmitya.seafilesync.data.prefs.SyncSettings
 import com.xmitya.seafilesync.service.NetworkPolicy
@@ -28,10 +29,13 @@ private val Context.accountDataStore: DataStore<Preferences> by preferencesDataS
  *
  * Dependencies are lazy so that nothing but the process itself is built on cold start.
  */
-class AppContainer(private val applicationContext: Context) {
+class AppContainer(
+    private val applicationContext: Context,
+) {
 
     val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient
+            .Builder()
             // Kept short on purpose. A host with several A records where only some answer is
             // common, and OkHttp only tries the next address once this expires, so a long
             // connect timeout turns a working server into a two-minute hang.
@@ -45,6 +49,23 @@ class AppContainer(private val applicationContext: Context) {
             .addInterceptor(RetryInterceptor())
             .build()
     }
+
+    /**
+     * The same client with the certificate and hostname checks removed, for the accounts that
+     * asked for it. Derived with newBuilder so it shares the connection pool, dispatcher and
+     * interceptors rather than standing up a second copy of all of them, and lazy so a process
+     * that never touches such an account never builds an SSLContext.
+     */
+    private val insecureHttpClient: OkHttpClient by lazy {
+        httpClient
+            .newBuilder()
+            .sslSocketFactory(InsecureTrust.socketFactory(), InsecureTrust.trustManager)
+            .hostnameVerifier(InsecureTrust.hostnameVerifier())
+            .build()
+    }
+
+    private fun clientFor(allowInsecureTls: Boolean) =
+        if (allowInsecureTls) insecureHttpClient else httpClient
 
     private val tokenCipher: KeystoreTokenCipher by lazy { KeystoreTokenCipher() }
 
@@ -83,9 +104,11 @@ class AppContainer(private val applicationContext: Context) {
         )
     }
 
-    fun seafileApi(serverUrl: String) = SeafileApi(serverUrl, httpClient)
+    fun seafileApi(serverUrl: String, allowInsecureTls: Boolean = false) =
+        SeafileApi(serverUrl, clientFor(allowInsecureTls))
 
-    fun seafHttpApi(serverUrl: String) = SeafHttpApi(serverUrl, httpClient) { body ->
-        log.warn("Server rejected commit: $body")
-    }
+    fun seafHttpApi(serverUrl: String, allowInsecureTls: Boolean = false) =
+        SeafHttpApi(serverUrl, clientFor(allowInsecureTls)) { body ->
+            log.warn("Server rejected commit: $body")
+        }
 }

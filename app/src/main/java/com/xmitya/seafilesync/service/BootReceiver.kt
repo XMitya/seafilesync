@@ -3,11 +3,10 @@ package com.xmitya.seafilesync.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
+import com.xmitya.seafilesync.app.appContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import com.xmitya.seafilesync.app.appContainer
 
 /**
  * Brings syncing back after a restart.
@@ -27,7 +26,10 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 val container = context.applicationContext.appContainer
                 val hasWork = container.accountStore.current() != null &&
-                    container.database.syncedRepos().all().isNotEmpty()
+                    container.database
+                        .syncedRepos()
+                        .all()
+                        .isNotEmpty()
                 if (hasWork) {
                     SyncForegroundService.start(context)
                     SyncWatchdogWorker.schedule(context)

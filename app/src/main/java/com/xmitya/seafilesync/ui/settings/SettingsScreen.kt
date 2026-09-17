@@ -27,6 +27,7 @@ import com.xmitya.seafilesync.R
 import com.xmitya.seafilesync.data.prefs.SyncPreferences
 
 const val SETTINGS_WIFI_ONLY_TAG = "settings-wifi-only"
+const val SETTINGS_INSECURE_TLS_TAG = "settings-insecure-tls"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +36,9 @@ fun SettingsScreen(
     accountEmail: String,
     serverUrl: String,
     syncRoot: String,
+    allowInsecureTls: Boolean,
     onWifiOnlyChanged: (Boolean) -> Unit,
+    onInsecureTlsChanged: (Boolean) -> Unit,
     onPollIntervalChanged: (Long) -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit,
@@ -56,7 +59,7 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
         ) {
             Setting(
                 title = stringResource(R.string.settings_account),
@@ -69,6 +72,37 @@ fun SettingsScreen(
                 subtitle = syncRoot,
             )
             HorizontalDivider()
+
+            // Nothing to skip on a cleartext server. Phrased as "not http" rather than "is
+            // https" so accounts connected before the scheme was stored -- their server is a
+            // bare host -- still get the row.
+            if (!serverUrl.startsWith("http://", ignoreCase = true)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onInsecureTlsChanged(!allowInsecureTls) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.insecure_tls_title),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = stringResource(R.string.insecure_tls_explanation),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = allowInsecureTls,
+                        onCheckedChange = onInsecureTlsChanged,
+                        modifier = Modifier.testTag(SETTINGS_INSECURE_TLS_TAG),
+                    )
+                }
+                HorizontalDivider()
+            }
 
             Row(
                 Modifier

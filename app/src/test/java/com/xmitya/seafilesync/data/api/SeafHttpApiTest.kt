@@ -98,7 +98,13 @@ class SeafHttpApiTest {
         val entries = api.packFs(token, repoId, listOf("b88ab96740ef53249b9d21fb3fa28050842266ba"))
 
         assertEquals(2, entries.size)
-        assertTrue(entries.first().json.decodeToString().startsWith("{"))
+        assertTrue(
+            entries
+                .first()
+                .json
+                .decodeToString()
+                .startsWith("{"),
+        )
     }
 
     @Test
@@ -199,7 +205,8 @@ class SeafHttpApiTest {
         enqueue("")
 
         api.putCommit(
-            token, repoId,
+            token,
+            repoId,
             com.xmitya.seafilesync.data.api.model.CommitDto(
                 commitId = "d".repeat(40),
                 rootId = "e".repeat(40),

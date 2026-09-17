@@ -29,10 +29,20 @@ class CdcChunkerTest {
     @Test
     fun `boundaries match the reference implementation`() {
         val expected = listOf(
-            0L to 2962810, 2962810L to 500175, 3462985L to 1922677, 5385662L to 416747,
-            5802409L to 404190, 6206599L to 447652, 6654251L to 588657, 7242908L to 1149491,
-            8392399L to 1013084, 9405483L to 972430, 10377913L to 619906, 10997819L to 761877,
-            11759696L to 750744, 12510440L to 72472,
+            0L to 2962810,
+            2962810L to 500175,
+            3462985L to 1922677,
+            5385662L to 416747,
+            5802409L to 404190,
+            6206599L to 447652,
+            6654251L to 588657,
+            7242908L to 1149491,
+            8392399L to 1013084,
+            9405483L to 972430,
+            10377913L to 619906,
+            10997819L to 761877,
+            11759696L to 750744,
+            12510440L to 72472,
         ).map { CdcChunker.Chunk(it.first, it.second) }
 
         assertEquals(expected, chunk(input(12 * 1024 * 1024)))
@@ -99,7 +109,9 @@ class CdcChunkerTest {
 
         // Everything after the disturbed region realigns and matches again.
         val shared = before.drop(1).intersect(after.drop(1).toSet())
-        assertTrue("expected most blocks to survive the edit, kept ${shared.size} of ${before.size}",
-            shared.size >= before.size - 3)
+        assertTrue(
+            "expected most blocks to survive the edit, kept ${shared.size} of ${before.size}",
+            shared.size >= before.size - 3,
+        )
     }
 }
