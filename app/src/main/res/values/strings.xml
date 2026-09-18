@@ -96,7 +96,6 @@
 
     <!-- Certificates. Shared between the login and settings screens. -->
     <string name="insecure_tls_title">Skip certificate check</string>
-    <string name="insecure_tls_explanation">Accepts any certificate the server presents, including one that is self-signed or expired. Anyone able to sit between this device and the server can then read and alter what is synced. Turn this on only for a server you run yourself.</string>
 
     <!-- Shared -->
     <string name="dismiss">Dismiss</string>
