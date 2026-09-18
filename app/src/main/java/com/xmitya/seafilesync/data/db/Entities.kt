@@ -72,6 +72,12 @@ data class FileIndexEntity(
     val localSizeBytes: Long,
     val localModifiedMillis: Long,
     val blockIds: List<String>,
+    /**
+     * The dirent's modifier as the server has it. Kept so a file this device never touched can be
+     * republished unchanged: the modifier is part of the parent directory's id, so inventing one
+     * makes an untouched tree look modified.
+     */
+    val modifier: String = "",
 )
 
 /**

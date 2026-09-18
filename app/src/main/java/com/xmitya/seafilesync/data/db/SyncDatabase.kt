@@ -10,6 +10,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import kotlinx.coroutines.flow.Flow
 
 /** Block id lists are fixed-width hex, so joining them is cheaper than a second table. */
@@ -107,7 +110,7 @@ interface PendingBlockDao {
 
 @Database(
     entities = [SyncedRepoEntity::class, FileIndexEntity::class, PendingBlockEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(ObjectIdListConverter::class)
@@ -120,7 +123,21 @@ abstract class SyncDatabase : RoomDatabase() {
     abstract fun pendingBlocks(): PendingBlockDao
 
     companion object {
+        /**
+         * Adds the server's dirent modifier to the file index. Empty for rows written before
+         * this, which reads as "not known" and falls back to the signed-in account, so the worst
+         * an upgraded install sees is the one spurious commit it would have made anyway.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE file_index ADD COLUMN modifier TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun open(context: Context): SyncDatabase =
-            Room.databaseBuilder(context, SyncDatabase::class.java, "sync.db").build()
+            Room
+                .databaseBuilder(context, SyncDatabase::class.java, "sync.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
     }
 }

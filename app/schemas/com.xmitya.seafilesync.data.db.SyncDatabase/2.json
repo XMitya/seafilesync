@@ -1,0 +1,226 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "7363d27430129933f5429f669cb071d7",
+    "entities": [
+      {
+        "tableName": "synced_repo",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repoId` TEXT NOT NULL, `name` TEXT NOT NULL, `localPath` TEXT NOT NULL, `lastSyncedCommitId` TEXT, `syncToken` TEXT, `status` TEXT NOT NULL, `errorMessage` TEXT, `isWritable` INTEGER NOT NULL, `lastSyncedAtMillis` INTEGER NOT NULL, `encVersion` INTEGER NOT NULL, `randomKey` TEXT NOT NULL, `encSalt` TEXT NOT NULL, `encryptedPassword` TEXT, PRIMARY KEY(`repoId`))",
+        "fields": [
+          {
+            "fieldPath": "repoId",
+            "columnName": "repoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPath",
+            "columnName": "localPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncedCommitId",
+            "columnName": "lastSyncedCommitId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncToken",
+            "columnName": "syncToken",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "errorMessage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isWritable",
+            "columnName": "isWritable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncedAtMillis",
+            "columnName": "lastSyncedAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encVersion",
+            "columnName": "encVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "randomKey",
+            "columnName": "randomKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encSalt",
+            "columnName": "encSalt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encryptedPassword",
+            "columnName": "encryptedPassword",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "repoId"
+          ]
+        }
+      },
+      {
+        "tableName": "file_index",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repoId` TEXT NOT NULL, `path` TEXT NOT NULL, `fileId` TEXT NOT NULL, `sizeBytes` INTEGER NOT NULL, `serverModifiedSeconds` INTEGER NOT NULL, `localSizeBytes` INTEGER NOT NULL, `localModifiedMillis` INTEGER NOT NULL, `blockIds` TEXT NOT NULL, `modifier` TEXT NOT NULL, PRIMARY KEY(`repoId`, `path`))",
+        "fields": [
+          {
+            "fieldPath": "repoId",
+            "columnName": "repoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileId",
+            "columnName": "fileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverModifiedSeconds",
+            "columnName": "serverModifiedSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localSizeBytes",
+            "columnName": "localSizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localModifiedMillis",
+            "columnName": "localModifiedMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockIds",
+            "columnName": "blockIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifier",
+            "columnName": "modifier",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "repoId",
+            "path"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_file_index_repoId",
+            "unique": false,
+            "columnNames": [
+              "repoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_file_index_repoId` ON `${TABLE_NAME}` (`repoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "pending_block",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repoId` TEXT NOT NULL, `path` TEXT NOT NULL, `blockIndex` INTEGER NOT NULL, `blockId` TEXT NOT NULL, PRIMARY KEY(`repoId`, `path`, `blockIndex`))",
+        "fields": [
+          {
+            "fieldPath": "repoId",
+            "columnName": "repoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockIndex",
+            "columnName": "blockIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockId",
+            "columnName": "blockId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "repoId",
+            "path",
+            "blockIndex"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pending_block_repoId",
+            "unique": false,
+            "columnNames": [
+              "repoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_block_repoId` ON `${TABLE_NAME}` (`repoId`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7363d27430129933f5429f669cb071d7')"
+    ]
+  }
+}

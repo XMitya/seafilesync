@@ -395,10 +395,14 @@ class SyncEngine(
             )
         }
 
-        val tree = treeBuilder.build(root, account.email, cipher = cipherFor(repo))
+        val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
+        val tree = treeBuilder.build(root, account.email, cipher = cipherFor(repo)) { path, fileId ->
+            // Only for a file whose content is still exactly what was last synced. Anything the
+            // user actually changed is theirs, and gets their name.
+            previous[path]?.takeIf { it.fileId == fileId }?.modifier?.ifEmpty { null }
+        }
         if (tree.rootId == parent.rootId) return null
 
-        val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
         val added = tree.files.keys.filterNot { it in previous }
         val modified = tree.files
             .filter { (path, entry) ->
@@ -437,6 +441,7 @@ class SyncEngine(
                     localSizeBytes = onDisk.length(),
                     localModifiedMillis = onDisk.lastModified(),
                     blockIds = entry.blocks.map { it.id },
+                    modifier = entry.modifier,
                 )
             },
         )
@@ -483,6 +488,7 @@ class SyncEngine(
             localSizeBytes = onDisk.length(),
             localModifiedMillis = onDisk.lastModified(),
             blockIds = remote.blockIds,
+            modifier = remote.modifier,
         )
 
     private suspend fun syncToken(session: Session, account: Account, repoId: String): String {
