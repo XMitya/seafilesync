@@ -37,7 +37,12 @@ class Uploader(
         repoId: String,
         repoName: String,
         tree: LocalTree,
-        parentCommitId: String?,
+        /**
+         * The commit this one is built on. Its repo-level metadata is carried forward: the server
+         * reads a library's settings off whatever commit is published as HEAD, so anything left
+         * out here is not merely absent from this commit, it is unset on the library.
+         */
+        parent: CommitDto,
         creatorName: String,
         deviceName: String,
         clientVersion: String,
@@ -61,12 +66,24 @@ class Uploader(
             creator = EMPTY_OBJECT_ID,
             description = description,
             ctime = now / 1000,
-            parentId = parentCommitId,
-            repoName = repoName,
-            repoDesc = repoName,
-            version = 1,
+            parentId = parent.commitId,
             deviceName = deviceName,
             clientVersion = clientVersion,
+            // Everything below describes the library rather than this change, and belongs to the
+            // parent. Writing an encrypted library's own values back is what keeps it encrypted:
+            // a commit published without them leaves the server holding a library it believes is
+            // plaintext while every block in it is still ciphertext.
+            repoName = parent.repoName.ifEmpty { repoName },
+            repoDesc = parent.repoDesc,
+            version = parent.version,
+            encrypted = parent.encrypted,
+            encVersion = parent.encVersion,
+            magic = parent.magic,
+            randomKey = parent.randomKey,
+            salt = parent.salt,
+            pwdHash = parent.pwdHash,
+            pwdHashAlgo = parent.pwdHashAlgo,
+            pwdHashParams = parent.pwdHashParams,
         )
         // Unlike fs objects, a commit's id is assigned by its creator rather than derived from
         // its content, so it just has to be unique and well formed.

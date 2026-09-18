@@ -11,6 +11,10 @@ import androidx.compose.ui.graphics.Color
  * hues and needs no extra dependency. Regenerate with Material Theme Builder if exact HCT tones
  * ever matter.
  *
+ * The neutrals carry no chroma at all: tinting them towards the amber hue, as Material's own
+ * generator does, turns every surface beige. The brand belongs on the accents, so the app sits on
+ * plain white and grey instead.
+ *
  * The suffix is the Material tone, so Amber40 is the amber hue at tone 40. That is what makes the
  * role assignments in SeafileSyncTheme readable against the Material 3 spec.
  */
@@ -40,15 +44,24 @@ internal val Navy80 = Color(0xFFA1CBF6)
 internal val Navy90 = Color(0xFFCEE5FF)
 internal val Navy100 = Color(0xFFFFFFFF)
 
-internal val Neutral6 = Color(0xFF19120A)
-internal val Neutral10 = Color(0xFF201B15)
-internal val Neutral20 = Color(0xFF352F29)
-internal val Neutral90 = Color(0xFFEAE1D9)
-internal val Neutral95 = Color(0xFFF8EFE8)
-internal val Neutral98 = Color(0xFFFFF8F2)
+internal val Neutral4 = Color(0xFF0F0F0F)
+internal val Neutral6 = Color(0xFF141414)
+internal val Neutral10 = Color(0xFF1B1B1B)
+internal val Neutral12 = Color(0xFF1F1F1F)
+internal val Neutral17 = Color(0xFF2A2A2A)
+internal val Neutral20 = Color(0xFF303030)
+internal val Neutral22 = Color(0xFF353535)
+internal val Neutral24 = Color(0xFF3A3A3A)
+internal val Neutral87 = Color(0xFFDEDEDE)
+internal val Neutral90 = Color(0xFFE3E3E3)
+internal val Neutral92 = Color(0xFFE9E9E9)
+internal val Neutral94 = Color(0xFFEFEFEF)
+internal val Neutral95 = Color(0xFFF2F2F2)
+internal val Neutral96 = Color(0xFFF4F4F4)
+internal val Neutral100 = Color(0xFFFFFFFF)
 
-internal val NeutralVariant30 = Color(0xFF514438)
-internal val NeutralVariant50 = Color(0xFF837567)
-internal val NeutralVariant60 = Color(0xFF9D8E80)
-internal val NeutralVariant80 = Color(0xFFD4C4B5)
-internal val NeutralVariant90 = Color(0xFFF0E0D1)
+internal val NeutralVariant30 = Color(0xFF464646)
+internal val NeutralVariant50 = Color(0xFF757575)
+internal val NeutralVariant60 = Color(0xFF8F8F8F)
+internal val NeutralVariant80 = Color(0xFFC7C7C7)
+internal val NeutralVariant90 = Color(0xFFE2E2E2)

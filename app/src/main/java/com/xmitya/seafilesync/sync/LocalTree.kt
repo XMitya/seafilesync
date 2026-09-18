@@ -48,6 +48,8 @@ data class LocalFileEntry(
     val sizeBytes: Long,
     val modifiedSeconds: Long,
     val blocks: List<LocalBlock>,
+    /** What went into this file's dirent, which is not always the signed-in account. */
+    val modifier: String = "",
 )
 
 /**
@@ -78,11 +80,20 @@ class LocalTreeBuilder(
         modifier: String,
         rules: IgnoreRules = IgnoreRules.load(root),
         cipher: LibraryCipher? = null,
+        /**
+         * The modifier the server already has for a file, given its path and the content id just
+         * computed for it. Returning null means this device is the modifier.
+         *
+         * A dirent's modifier is part of its directory's id, so claiming every file as the
+         * signed-in account rewrites the id of every directory whose contents did not change --
+         * which makes an untouched library look modified on every single pass.
+         */
+        knownModifier: (path: String, fileId: String) -> String? = { _, _ -> null },
     ): LocalTree {
         val objects = mutableMapOf<String, FsObject>()
         val files = mutableMapOf<String, LocalFileEntry>()
         val blocks = mutableMapOf<String, LocalBlock>()
-        val rootId = buildDirectory(root, "", modifier, rules, cipher, objects, files, blocks)
+        val rootId = buildDirectory(root, "", modifier, rules, cipher, knownModifier, objects, files, blocks)
         return LocalTree(rootId, objects, files, blocks)
     }
 
@@ -92,6 +103,7 @@ class LocalTreeBuilder(
         modifier: String,
         rules: IgnoreRules,
         cipher: LibraryCipher?,
+        knownModifier: (path: String, fileId: String) -> String?,
         objects: MutableMap<String, FsObject>,
         files: MutableMap<String, LocalFileEntry>,
         blocks: MutableMap<String, LocalBlock>,
@@ -103,21 +115,22 @@ class LocalTreeBuilder(
             if (isAlwaysIgnored(child) || rules.isIgnored(path, child.isDirectory)) continue
 
             if (child.isDirectory) {
-                val id = buildDirectory(child, path, modifier, rules, cipher, objects, files, blocks)
+                val id = buildDirectory(child, path, modifier, rules, cipher, knownModifier, objects, files, blocks)
                 entries += SeafDirent.directory(
                     id = id,
                     name = child.name,
                     mtime = child.lastModified() / 1000,
                 )
             } else {
-                val entry = buildFile(child, path, cipher, objects, blocks)
+                val built = buildFile(child, path, cipher, objects, blocks)
+                val entry = built.copy(modifier = knownModifier(path, built.fileId) ?: modifier)
                 files[path] = entry
                 entries += SeafDirent.file(
                     id = entry.fileId,
                     name = child.name,
                     mtime = entry.modifiedSeconds,
                     size = entry.sizeBytes,
-                    modifier = modifier,
+                    modifier = entry.modifier,
                 )
             }
         }

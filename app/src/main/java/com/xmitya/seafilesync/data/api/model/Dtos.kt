@@ -109,4 +109,7 @@ data class CommitDto(
     @SerialName("pwd_hash_params") val pwdHashParams: String? = null,
     @SerialName("device_name") val deviceName: String? = null,
     @SerialName("client_version") val clientVersion: String? = null,
-)
+) {
+    /** Written as the string "true", not as a JSON boolean, and absent entirely when false. */
+    val isEncrypted: Boolean get() = encrypted.equals("true", ignoreCase = true)
+}

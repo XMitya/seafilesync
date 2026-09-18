@@ -14,6 +14,8 @@ data class RemoteFile(
     val sizeBytes: Long,
     val modifiedSeconds: Long,
     val blockIds: List<String>,
+    /** Who the server records as having last written the file. Part of its directory's id. */
+    val modifier: String = "",
 )
 
 /** The server's view of a library at one commit. */
@@ -76,6 +78,7 @@ class RemoteTreeReader(
                             fileId = entry.id,
                             sizeBytes = entry.size,
                             modifiedSeconds = entry.mtime,
+                            modifier = entry.modifier.orEmpty(),
                             // Filled in below for entries whose object was not in this batch.
                             blockIds = file?.blockIds ?: emptyList(),
                         )
