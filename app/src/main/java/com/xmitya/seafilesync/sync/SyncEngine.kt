@@ -3,6 +3,7 @@ package com.xmitya.seafilesync.sync
 import com.xmitya.seafilesync.app.SyncLog
 import com.xmitya.seafilesync.data.api.SeafHttpApi
 import com.xmitya.seafilesync.data.api.SeafileApi
+import com.xmitya.seafilesync.data.api.model.CommitDto
 import com.xmitya.seafilesync.data.crypto.LibraryCipher
 import com.xmitya.seafilesync.data.crypto.LibraryCrypto
 import com.xmitya.seafilesync.data.crypto.WrongLibraryPasswordException
@@ -258,15 +259,7 @@ class SyncEngine(
             // for here as well, or an edit made while nobody else touched the library would sit
             // on the device forever.
             val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
-            val pushed = pushLocalChanges(
-                session,
-                account,
-                repo,
-                token,
-                File(repo.localPath),
-                headCommitId,
-                commit.rootId,
-            )
+            val pushed = pushLocalChanges(session, account, repo, token, File(repo.localPath), commit)
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_IDLE)
             return if (pushed == null) {
                 SyncOutcome.UpToDate(repo.repoId)
@@ -368,7 +361,7 @@ class SyncEngine(
         // an interrupted sync look complete and leave files permanently stale.
         repos.markSynced(repo.repoId, headCommitId, clock())
 
-        val pushed = pushLocalChanges(session, account, repo, token, root, headCommitId, commit.rootId)
+        val pushed = pushLocalChanges(session, account, repo, token, root, commit)
         return SyncOutcome.Synced(repo.repoId, pushed ?: headCommitId, downloaded)
     }
 
@@ -385,13 +378,25 @@ class SyncEngine(
         repo: SyncedRepoEntity,
         token: String,
         root: File,
-        remoteCommitId: String,
-        remoteRootId: String,
+        /** The library's head, which the new commit is built on and inherits its metadata from. */
+        parent: CommitDto,
     ): String? {
         if (!repo.isWritable) return null
 
+        // Whether blocks get encrypted is decided here, from what this device recorded when the
+        // library was added; whether the library is encrypted at all is decided by the server,
+        // from the head commit. Pushing while those two disagree writes blocks the other side
+        // cannot read, so it stops here instead.
+        if (repo.isEncrypted != parent.isEncrypted) {
+            throw IOException(
+                "This device has ${repo.name} as ${describeEncryption(repo.isEncrypted)} but the server " +
+                    "has it as ${describeEncryption(parent.isEncrypted)}; refusing to push. " +
+                    "Stop syncing the library and add it again.",
+            )
+        }
+
         val tree = treeBuilder.build(root, account.email, cipher = cipherFor(repo))
-        if (tree.rootId == remoteRootId) return null
+        if (tree.rootId == parent.rootId) return null
 
         val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
         val added = tree.files.keys.filterNot { it in previous }
@@ -407,7 +412,7 @@ class SyncEngine(
             repoId = repo.repoId,
             repoName = repo.name,
             tree = tree,
-            parentCommitId = remoteCommitId,
+            parent = parent,
             creatorName = account.email,
             deviceName = deviceName,
             clientVersion = clientVersion,
@@ -485,6 +490,8 @@ class SyncEngine(
         repos.updateToken(repoId, info.token)
         return info.token
     }
+
+    private fun describeEncryption(encrypted: Boolean) = if (encrypted) "encrypted" else "not encrypted"
 
     private fun updateProgress(repoId: String, transform: (RepoProgress) -> RepoProgress) {
         _status.update { status ->
