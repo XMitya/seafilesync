@@ -254,11 +254,15 @@ class SyncEngine(
         if (head.corrupted) throw IOException("Library is corrupted on the server")
         val headCommitId = head.headCommitId ?: return SyncOutcome.UpToDate(repo.repoId)
 
+        // Both directions read this, and it has to be read before either of them moves a byte:
+        // the commit is where the library says whether it is encrypted.
+        val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
+        requireEncryptionAgrees(repo, commit)
+
         if (headCommitId == repo.lastSyncedCommitId) {
             // The server has not moved, but the user may have. Local changes have to be looked
             // for here as well, or an edit made while nobody else touched the library would sit
             // on the device forever.
-            val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
             val pushed = pushLocalChanges(session, account, repo, token, File(repo.localPath), commit)
             repos.updateStatus(repo.repoId, SyncedRepoEntity.STATUS_IDLE)
             return if (pushed == null) {
@@ -268,7 +272,6 @@ class SyncEngine(
             }
         }
 
-        val commit = session.seafHttp.commit(token, repo.repoId, headCommitId)
         val snapshot = session.treeReader.read(token, repo.repoId, headCommitId, commit.rootId)
         val root = File(repo.localPath)
         val index = fileIndex.forRepo(repo.repoId)
@@ -383,18 +386,6 @@ class SyncEngine(
     ): String? {
         if (!repo.isWritable) return null
 
-        // Whether blocks get encrypted is decided here, from what this device recorded when the
-        // library was added; whether the library is encrypted at all is decided by the server,
-        // from the head commit. Pushing while those two disagree writes blocks the other side
-        // cannot read, so it stops here instead.
-        if (repo.isEncrypted != parent.isEncrypted) {
-            throw IOException(
-                "This device has ${repo.name} as ${describeEncryption(repo.isEncrypted)} but the server " +
-                    "has it as ${describeEncryption(parent.isEncrypted)}; refusing to push. " +
-                    "Stop syncing the library and add it again.",
-            )
-        }
-
         val previous = fileIndex.forRepo(repo.repoId).associateBy { it.path }
         val tree = treeBuilder.build(root, account.email, cipher = cipherFor(repo)) { path, fileId ->
             // Only for a file whose content is still exactly what was last synced. Anything the
@@ -495,6 +486,23 @@ class SyncEngine(
         val info = session.api.downloadInfo(account.token, repoId)
         repos.updateToken(repoId, info.token)
         return info.token
+    }
+
+    /**
+     * Refuses to transfer anything while the two sides disagree about encryption.
+     *
+     * Whether blocks are encrypted is decided from what this device recorded when the library was
+     * added; whether the library is encrypted at all is decided by the server, from the head
+     * commit. While those disagree, every transfer is wrong in both directions -- downloads
+     * reassemble ciphertext as if it were the file, uploads publish blocks nobody can read -- and
+     * the failure they produce on their own says nothing about the cause.
+     */
+    private fun requireEncryptionAgrees(repo: SyncedRepoEntity, head: CommitDto) {
+        if (repo.isEncrypted == head.isEncrypted) return
+        throw IOException(
+            "This device has ${repo.name} as ${describeEncryption(repo.isEncrypted)} but the server " +
+                "has it as ${describeEncryption(head.isEncrypted)}. Stop syncing the library and add it again.",
+        )
     }
 
     private fun describeEncryption(encrypted: Boolean) = if (encrypted) "encrypted" else "not encrypted"
