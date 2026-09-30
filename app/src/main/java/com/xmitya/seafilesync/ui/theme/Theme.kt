@@ -1,5 +1,6 @@
 package com.xmitya.seafilesync.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -91,7 +92,7 @@ private val LightColorScheme = lightColorScheme(
  * @param dynamicColor take the palette from the wallpaper instead of the app's own.
  *   Off by default: the app has a brand of its own now, and an icon drawn in it, so following the
  *   wallpaper would leave the two disagreeing on every device. Still exposed as a parameter for
- *   anyone who prefers Material You.
+ *   anyone who prefers Material You. Ignored below Android 12, which has no wallpaper palette.
  */
 @Composable
 fun SeafileSyncTheme(
@@ -100,7 +101,7 @@ fun SeafileSyncTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
-        dynamicColor -> {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
