@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -94,6 +95,9 @@ fun AskForNotificationPermission() {
     // registered once composition finishes, so calling it inline throws "Launcher has not been
     // initialized" -- and writing state during composition would be wrong regardless.
     LaunchedEffect(Unit) {
+        // Before Android 13 notifications are on by default and there is no permission to ask
+        // for; requesting it anyway is silently denied.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
         val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
         if (!granted) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)

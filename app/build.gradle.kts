@@ -15,7 +15,9 @@ android {
 
     defaultConfig {
         applicationId = "com.xmitya.seafilesync"
-        minSdk = 34
+        // All-files access (MANAGE_EXTERNAL_STORAGE) arrived in Android 11, and the sync folder
+        // relies on it, so this is as low as the app can go without a different storage model.
+        minSdk = 30
         targetSdk = 37
         // Release builds get these from the git tag (see .github/workflows/release.yml); a plain
         // local build keeps the defaults.
