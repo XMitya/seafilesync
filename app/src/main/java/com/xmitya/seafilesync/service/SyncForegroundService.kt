@@ -19,7 +19,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
@@ -81,10 +80,14 @@ class SyncForegroundService : Service() {
                 }
             }
             scope.launch {
-                appContainer.syncEngine.status.collectLatest { status ->
+                appContainer.syncEngine.status.collect { status ->
                     notifications.update(status)
                     // The notification is redrawn on every progress tick, so it is throttled to
                     // roughly once a second; updating per block would burn battery and risk ANRs.
+                    // The throttle is collect itself: a StateFlow collector still in its delay is
+                    // handed only the latest value once it is free. collectLatest cancelled the
+                    // delay on every tick instead, redrawing ~19 times a second on a Boox, often
+                    // enough that the system dropped updates.
                     delay(NOTIFICATION_THROTTLE_MILLIS)
                 }
             }
