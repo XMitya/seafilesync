@@ -38,13 +38,24 @@ class SyncForegroundService : Service() {
     private lateinit var notifications: SyncNotifications
     private var syncLoop: Job? = null
     private var watcher: LocalChangeWatcher? = null
-    private var wakeLock: PowerManager.WakeLock? = null
-    private var wifiLock: WifiManager.WifiLock? = null
+    private lateinit var locks: TransferLocks
 
     override fun onCreate() {
         super.onCreate()
         notifications = SyncNotifications(this)
         notifications.createChannel()
+        locks = TransferLocks(
+            wakeLock = TransferLocks.wakeLock(
+                getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$LOCK_TAG:transfer"),
+                WAKE_LOCK_TIMEOUT_MILLIS,
+            ),
+            wifiLock = TransferLocks.wifiLock(
+                getSystemService(WifiManager::class.java)
+                    .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$LOCK_TAG:transfer"),
+            ),
+            clock = SystemClock::elapsedRealtime,
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -62,9 +73,11 @@ class SyncForegroundService : Service() {
             watcher = LocalChangeWatcher(scope, appContainer.log) { repoId -> syncOne(repoId) }
             // Locks are held only while bytes are actually moving. Holding them for the whole
             // life of the service would keep the CPU and radio awake through every idle poll.
-            scope.launch {
+            // On the main thread, like onDestroy, so a tick cannot take them again after
+            // onDestroy has let go of them.
+            scope.launch(Dispatchers.Main) {
                 appContainer.syncEngine.status.collect { status ->
-                    if (status.isTransferring) acquireLocks() else releaseLocks()
+                    if (status.isTransferring) locks.hold() else locks.release()
                 }
             }
             scope.launch {
@@ -149,31 +162,8 @@ class SyncForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun acquireLocks() {
-        if (wakeLock?.isHeld == true) return
-        wakeLock = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$LOCK_TAG:transfer")
-            .apply {
-                setReferenceCounted(false)
-                acquire(WAKE_LOCK_TIMEOUT_MILLIS)
-            }
-        wifiLock = getSystemService(WifiManager::class.java)
-            .createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "$LOCK_TAG:transfer")
-            .apply {
-                setReferenceCounted(false)
-                acquire()
-            }
-    }
-
-    private fun releaseLocks() {
-        wakeLock?.takeIf { it.isHeld }?.release()
-        wakeLock = null
-        wifiLock?.takeIf { it.isHeld }?.release()
-        wifiLock = null
-    }
-
     override fun onDestroy() {
-        releaseLocks()
+        locks.release()
         watcher?.stopAll()
         scope.cancel()
         super.onDestroy()
@@ -193,7 +183,7 @@ class SyncForegroundService : Service() {
 
         /**
          * A timeout on the wake lock so a bug in the sync loop cannot drain the battery
-         * indefinitely; a transfer that legitimately runs longer re-acquires it.
+         * indefinitely; a transfer that legitimately runs longer renews it as it goes.
          */
         private const val WAKE_LOCK_TIMEOUT_MILLIS = 10 * 60 * 1000L
 
