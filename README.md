@@ -58,7 +58,14 @@ release with both, their SHA-256 and generated notes (`.github/workflows/release
 for installing directly; the bundle (`.aab`) is what Google Play takes, since it no longer accepts
 APKs. The version name is the tag without the `v`; the version code is derived from it (`1.2.3`
 becomes `10203`), so minor and patch stay below 100. Running the same workflow by hand from the
-Actions tab builds both files for a given version as an artifact without releasing anything.
+Actions tab builds the same files for a given version as an artifact without releasing anything.
+
+Compose and DataStore bring small native libraries, so the release build also extracts their debug
+symbols, which Google Play uses to make sense of native crashes and ANRs. They travel inside the
+bundle, and the release carries them as a separate `-native-debug-symbols.zip` too, for a version
+whose bundle reached Play without them. Extracting them needs the NDK version pinned as `ndk` in
+`gradle/libs.versions.toml`; the workflow installs it, while a local build without that NDK
+quietly leaves the symbols out and the libraries unstripped.
 
 Signing needs four repository secrets: `SIGNING_KEYSTORE_BASE64` (the keystore file, base64),
 `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`. The build reads the

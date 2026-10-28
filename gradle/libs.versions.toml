@@ -21,6 +21,9 @@ androidxTestCore = "1.7.0"
 ktlint = "14.2.0"
 ktlintEngine = "1.6.0"
 kover = "0.9.9"
+# Not a dependency: the NDK the release build strips the native libraries with and extracts their
+# debug symbols with. The release workflow installs this exact version.
+ndk = "29.0.14206865"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

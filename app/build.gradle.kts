@@ -12,6 +12,10 @@ android {
     compileSdk {
         version = release(37)
     }
+    // Pinned so CI knows which NDK to install (see .github/workflows/release.yml). The app has no
+    // C++ of its own, but Compose and DataStore bring small native libraries, and without an NDK
+    // they are packaged unstripped and their debug symbols are not extracted.
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         applicationId = "com.xmitya.seafilesync"
@@ -45,6 +49,11 @@ android {
         release {
             optimization {
                 enable = false
+            }
+            // Google Play reads these from the bundle and symbolicates native crashes and ANRs
+            // with them. AGP also writes them to native-debug-symbols.zip, for uploading by hand.
+            ndk {
+                debugSymbolLevel = "FULL"
             }
             if (keystorePath != null) {
                 signingConfig = signingConfigs.getByName("release")
