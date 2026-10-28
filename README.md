@@ -53,19 +53,24 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-That builds a signed release APK, runs the tests against it, and publishes a GitHub release with
-the APK, its SHA-256 and generated notes (`.github/workflows/release.yml`). The version name is
-the tag without the `v`; the version code is derived from it (`1.2.3` becomes `10203`), so minor
-and patch stay below 100. Running the same workflow by hand from the Actions tab builds the APK
-for a given version as an artifact without releasing anything.
+That runs the tests, builds a signed release APK and a signed app bundle, and publishes a GitHub
+release with both, their SHA-256 and generated notes (`.github/workflows/release.yml`). The APK is
+for installing directly; the bundle (`.aab`) is what Google Play takes, since it no longer accepts
+APKs. The version name is the tag without the `v`; the version code is derived from it (`1.2.3`
+becomes `10203`), so minor and patch stay below 100. Running the same workflow by hand from the
+Actions tab builds both files for a given version as an artifact without releasing anything.
 
 Signing needs four repository secrets: `SIGNING_KEYSTORE_BASE64` (the keystore file, base64),
 `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`. The build reads the
 same values from environment variables, with `SIGNING_KEYSTORE` pointing at the file, so a
-release can be signed locally too; without them `assembleRelease` produces an unsigned APK.
+release can be signed locally too; without them `assembleRelease` and `bundleRelease` produce
+unsigned files.
 
 A release APK is signed with a different key than a debug build, so Android refuses to install one
-over the other. Uninstall first, which also drops the app's data and its Keystore key.
+over the other. Uninstall first, which also drops the app's data and its Keystore key. The same
+goes for a copy from Google Play if Play signs the app with a key of its own, which it does
+unless the release key was handed to it when the app was set up there: the key the bundle is
+signed with then only proves the upload came from us.
 
 ## Testing
 
