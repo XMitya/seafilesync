@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag such as v1.2.3 builds a signed APK and publishes it as a GitHub release.
-# Running the workflow by hand builds the same APK for a given version, as an artifact only,
+# Pushing a tag such as v1.2.3 builds a signed APK, for installing directly, and a signed app
+# bundle (AAB), for uploading to Google Play, and publishes both as a GitHub release.
+# Running the workflow by hand builds the same files for a given version, as an artifact only,
 # without creating a release -- for checking the pipeline or a candidate build.
 on:
   push:
@@ -65,24 +66,28 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Run unit tests and build the signed release APK
+      - name: Run unit tests and build the signed release APK and app bundle
         env:
           SIGNING_KEYSTORE: ${{ runner.temp }}/release.jks
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: >
-          ./gradlew :app:check :app:assembleRelease --stacktrace
+          ./gradlew :app:check :app:assembleRelease :app:bundleRelease --stacktrace
           -PversionName=${{ steps.version.outputs.name }}
           -PversionCode=${{ steps.version.outputs.code }}
 
-      - name: Name the APK after the version
-        id: apk
+      - name: Name the APK and app bundle after the version
+        id: files
         run: |
           apk="seafilesync-${{ steps.version.outputs.name }}.apk"
+          aab="seafilesync-${{ steps.version.outputs.name }}.aab"
           mv app/build/outputs/apk/release/app-release.apk "$apk"
+          mv app/build/outputs/bundle/release/app-release.aab "$aab"
           sha256sum "$apk" > "$apk.sha256"
-          echo "path=$apk" >> "$GITHUB_OUTPUT"
+          sha256sum "$aab" > "$aab.sha256"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+          echo "aab=$aab" >> "$GITHUB_OUTPUT"
 
       - name: Keep the test reports
         if: always()
@@ -92,19 +97,23 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
 
-      - name: Keep the APK
+      - name: Keep the APK and app bundle
         uses: actions/upload-artifact@v7
         with:
           name: seafilesync-${{ steps.version.outputs.name }}
           path: |
-            ${{ steps.apk.outputs.path }}
-            ${{ steps.apk.outputs.path }}.sha256
+            ${{ steps.files.outputs.apk }}
+            ${{ steps.files.outputs.apk }}.sha256
+            ${{ steps.files.outputs.aab }}
+            ${{ steps.files.outputs.aab }}.sha256
 
       - name: Publish the release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            ${{ steps.apk.outputs.path }}
-            ${{ steps.apk.outputs.path }}.sha256
+            ${{ steps.files.outputs.apk }}
+            ${{ steps.files.outputs.apk }}.sha256
+            ${{ steps.files.outputs.aab }}
+            ${{ steps.files.outputs.aab }}.sha256
           generate_release_notes: true
