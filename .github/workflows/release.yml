@@ -1,7 +1,9 @@
 name: Release
 
 # Pushing a tag such as v1.2.3 builds a signed APK, for installing directly, and a signed app
-# bundle (AAB), for uploading to Google Play, and publishes both as a GitHub release.
+# bundle (AAB), for uploading to Google Play, and publishes both as a GitHub release along with
+# the native debug symbols. Play reads the symbols from the bundle itself; the separate zip is for
+# uploading to a version whose bundle went up without them.
 # Running the workflow by hand builds the same files for a given version, as an artifact only,
 # without creating a release -- for checking the pipeline or a candidate build.
 on:
@@ -66,6 +68,20 @@ jobs:
         with:
           cache-read-only: true
 
+      - name: Install the NDK
+        # The build strips the native libraries and extracts their debug symbols with the NDK, but
+        # AGP only downloads one for a C++ build; without it the build quietly does neither. The
+        # runner image carries a few NDK versions that change over time, so install the pinned one
+        # unless it is already there.
+        run: |
+          ndk=$(sed -n 's/^ndk = "\(.*\)"$/\1/p' gradle/libs.versions.toml)
+          if [ -z "$ndk" ]; then
+            echo "::error::No ndk version in gradle/libs.versions.toml"
+            exit 1
+          fi
+          if [ ! -d "$ANDROID_HOME/ndk/$ndk" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk"
+          fi
       - name: Run unit tests and build the signed release APK and app bundle
         env:
           SIGNING_KEYSTORE: ${{ runner.temp }}/release.jks
@@ -77,17 +93,27 @@ jobs:
           -PversionName=${{ steps.version.outputs.name }}
           -PversionCode=${{ steps.version.outputs.code }}
 
-      - name: Name the APK and app bundle after the version
+      - name: Name the APK, app bundle and debug symbols after the version
         id: files
         run: |
           apk="seafilesync-${{ steps.version.outputs.name }}.apk"
           aab="seafilesync-${{ steps.version.outputs.name }}.aab"
+          symbols="seafilesync-${{ steps.version.outputs.name }}-native-debug-symbols.zip"
+          # Play takes the symbols from the bundle; a bundle without them still uploads fine, so
+          # check here rather than find out from an unreadable crash.
+          if ! unzip -l app/build/outputs/bundle/release/app-release.aab \
+              | grep -q 'BUNDLE-METADATA/com.android.tools.build.debugsymbols/'; then
+            echo "::error::The app bundle carries no native debug symbols; was the NDK found?"
+            exit 1
+          fi
           mv app/build/outputs/apk/release/app-release.apk "$apk"
           mv app/build/outputs/bundle/release/app-release.aab "$aab"
+          mv app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip "$symbols"
           sha256sum "$apk" > "$apk.sha256"
           sha256sum "$aab" > "$aab.sha256"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
           echo "aab=$aab" >> "$GITHUB_OUTPUT"
+          echo "symbols=$symbols" >> "$GITHUB_OUTPUT"
 
       - name: Keep the test reports
         if: always()
@@ -97,7 +123,7 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
 
-      - name: Keep the APK and app bundle
+      - name: Keep the APK, app bundle and debug symbols
         uses: actions/upload-artifact@v7
         with:
           name: seafilesync-${{ steps.version.outputs.name }}
@@ -106,6 +132,7 @@ jobs:
             ${{ steps.files.outputs.apk }}.sha256
             ${{ steps.files.outputs.aab }}
             ${{ steps.files.outputs.aab }}.sha256
+            ${{ steps.files.outputs.symbols }}
 
       - name: Publish the release
         if: github.event_name == 'push'
@@ -116,4 +143,5 @@ jobs:
             ${{ steps.files.outputs.apk }}.sha256
             ${{ steps.files.outputs.aab }}
             ${{ steps.files.outputs.aab }}.sha256
+            ${{ steps.files.outputs.symbols }}
           generate_release_notes: true
