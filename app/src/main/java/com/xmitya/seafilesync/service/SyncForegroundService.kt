@@ -38,6 +38,7 @@ class SyncForegroundService : Service() {
     private var syncLoop: Job? = null
     private var watcher: LocalChangeWatcher? = null
     private lateinit var locks: TransferLocks
+    private var latestStartId = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +59,8 @@ class SyncForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
+
         // Must happen promptly after start or the system kills the process, so it goes before
         // any work rather than after the first sync pass.
         ServiceCompat.startForeground(
@@ -70,6 +73,17 @@ class SyncForegroundService : Service() {
         if (syncLoop == null) {
             syncLoop = scope.launch { runSyncLoop() }
             watcher = LocalChangeWatcher(scope, appContainer.log) { repoId -> syncOne(repoId) }
+            // Stops the service as soon as there is nothing left to sync -- the last library
+            // switched off, or the user signed out -- instead of leaving the notification up
+            // until the next poll notices. Stopping with the latest start id rather than
+            // unconditionally lets a start that arrived meanwhile, such as a library switched
+            // straight back on, keep the service alive. On the main thread, where
+            // onStartCommand updates that id.
+            scope.launch(Dispatchers.Main) {
+                appContainer.syncDemand.hasWork.collect { hasWork ->
+                    if (!hasWork) stopSelf(latestStartId)
+                }
+            }
             // Locks are held only while bytes are actually moving. Holding them for the whole
             // life of the service would keep the CPU and radio awake through every idle poll.
             // On the main thread, like onDestroy, so a tick cannot take them again after
@@ -101,11 +115,8 @@ class SyncForegroundService : Service() {
     private suspend fun runSyncLoop() {
         val container = appContainer
         while (scope.isActive) {
-            val account = container.accountStore.current()
-            if (account == null) {
-                stopSelf()
-                return
-            }
+            // Signed out: the hasWork collector stops the service.
+            val account = container.accountStore.current() ?: return
             val preferences = container.settings.current()
             if (container.networkPolicy.current().allowsSync(preferences.wifiOnly)) {
                 runCatching {
