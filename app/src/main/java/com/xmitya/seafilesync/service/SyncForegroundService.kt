@@ -63,12 +63,10 @@ class SyncForegroundService : Service() {
 
         // Must happen promptly after start or the system kills the process, so it goes before
         // any work rather than after the first sync pass.
-        ServiceCompat.startForeground(
-            this,
-            SyncNotifications.NOTIFICATION_ID,
-            notifications.build(appContainer.syncEngine.status.value),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-        )
+        if (!enterForeground()) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
 
         if (syncLoop == null) {
             syncLoop = scope.launch { runSyncLoop() }
@@ -111,6 +109,31 @@ class SyncForegroundService : Service() {
         // needs more than this and arrives with the resilience milestone.
         return START_STICKY
     }
+
+    /**
+     * Returns false when the system refuses, which it does by throwing here, in the app's own
+     * process: Android 15+ refuses a dataSync service started from BOOT_COMPLETED unless the app
+     * is exempt from battery optimisation, and one started after its daily budget is spent.
+     * Uncaught, the refusal crashed the process on every boot, and again on each restart the
+     * system then scheduled for the crashed service.
+     *
+     * Caught as IllegalStateException because ForegroundServiceStartNotAllowedException, its
+     * subclass, only exists from API 31, below which nothing is refused here anyway.
+     */
+    private fun enterForeground(): Boolean =
+        try {
+            ServiceCompat.startForeground(
+                this,
+                SyncNotifications.NOTIFICATION_ID,
+                notifications.build(appContainer.syncEngine.status.value),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+            true
+        } catch (refused: IllegalStateException) {
+            appContainer.log.warn("System refused to run sync in the foreground; the watchdog will retry", refused)
+            SyncWatchdogWorker.schedule(this)
+            false
+        }
 
     private suspend fun runSyncLoop() {
         val container = appContainer
@@ -201,8 +224,18 @@ class SyncForegroundService : Service() {
          */
         private const val WAKE_LOCK_TIMEOUT_MILLIS = 10 * 60 * 1000L
 
+        /**
+         * Android 12+ refuses a foreground start from the background unless the app is exempt
+         * from battery optimisation, and throws to say so. The background callers -- boot, the
+         * watchdog -- can only try again later, so a refusal is logged instead of crashing the
+         * process.
+         */
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, SyncForegroundService::class.java))
+            try {
+                context.startForegroundService(Intent(context, SyncForegroundService::class.java))
+            } catch (refused: IllegalStateException) {
+                context.appContainer.log.warn("System refused to start the sync service", refused)
+            }
         }
 
         fun stop(context: Context) {
