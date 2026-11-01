@@ -13,24 +13,23 @@ import kotlinx.coroutines.launch
  *
  * Without this the app only resumes when the user next opens it, which for a background sync
  * client means it quietly stops working after every reboot.
+ *
+ * On Android 15+ the start only succeeds for an app exempt from battery optimisation: a dataSync
+ * service started on the strength of BOOT_COMPLETED alone is refused. The service handles that
+ * refusal itself. Deferring the start to a job does not help, since a job is refused the same way
+ * without the exemption and is not needed with it.
  */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in HANDLED_ACTIONS) return
 
-        // The receiver must return quickly, so the account check happens in a goAsync block
-        // rather than blocking the main thread on a DataStore read.
+        // The receiver must return quickly, so the check happens in a goAsync block rather than
+        // blocking the main thread on a DataStore read.
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val container = context.applicationContext.appContainer
-                val hasWork = container.accountStore.current() != null &&
-                    container.database
-                        .syncedRepos()
-                        .all()
-                        .isNotEmpty()
-                if (hasWork) {
+                if (context.appContainer.syncDemand.current()) {
                     SyncForegroundService.start(context)
                     SyncWatchdogWorker.schedule(context)
                 }

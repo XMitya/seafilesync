@@ -15,6 +15,7 @@ import com.xmitya.seafilesync.data.prefs.AccountStore
 import com.xmitya.seafilesync.data.prefs.KeystoreTokenCipher
 import com.xmitya.seafilesync.data.prefs.SyncSettings
 import com.xmitya.seafilesync.service.NetworkPolicy
+import com.xmitya.seafilesync.service.SyncDemand
 import com.xmitya.seafilesync.sync.SyncEngine
 import okhttp3.OkHttpClient
 import java.io.File
@@ -90,6 +91,10 @@ class AppContainer(
     val userAgent: String = "Seafile/$appVersion (Android)"
 
     val database: SyncDatabase by lazy { SyncDatabase.open(applicationContext) }
+
+    val syncDemand: SyncDemand by lazy {
+        SyncDemand(accountStore.account, database.syncedRepos().observeAll())
+    }
 
     val syncEngine: SyncEngine by lazy {
         SyncEngine(

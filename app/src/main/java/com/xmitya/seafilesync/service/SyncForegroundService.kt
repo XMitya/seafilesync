@@ -38,6 +38,7 @@ class SyncForegroundService : Service() {
     private var syncLoop: Job? = null
     private var watcher: LocalChangeWatcher? = null
     private lateinit var locks: TransferLocks
+    private var latestStartId = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -58,18 +59,29 @@ class SyncForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
+
         // Must happen promptly after start or the system kills the process, so it goes before
         // any work rather than after the first sync pass.
-        ServiceCompat.startForeground(
-            this,
-            SyncNotifications.NOTIFICATION_ID,
-            notifications.build(appContainer.syncEngine.status.value),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-        )
+        if (!enterForeground()) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
 
         if (syncLoop == null) {
             syncLoop = scope.launch { runSyncLoop() }
             watcher = LocalChangeWatcher(scope, appContainer.log) { repoId -> syncOne(repoId) }
+            // Stops the service as soon as there is nothing left to sync -- the last library
+            // switched off, or the user signed out -- instead of leaving the notification up
+            // until the next poll notices. Stopping with the latest start id rather than
+            // unconditionally lets a start that arrived meanwhile, such as a library switched
+            // straight back on, keep the service alive. On the main thread, where
+            // onStartCommand updates that id.
+            scope.launch(Dispatchers.Main) {
+                appContainer.syncDemand.hasWork.collect { hasWork ->
+                    if (!hasWork) stopSelf(latestStartId)
+                }
+            }
             // Locks are held only while bytes are actually moving. Holding them for the whole
             // life of the service would keep the CPU and radio awake through every idle poll.
             // On the main thread, like onDestroy, so a tick cannot take them again after
@@ -98,14 +110,36 @@ class SyncForegroundService : Service() {
         return START_STICKY
     }
 
+    /**
+     * Returns false when the system refuses, which it does by throwing here, in the app's own
+     * process: Android 15+ refuses a dataSync service started from BOOT_COMPLETED unless the app
+     * is exempt from battery optimisation, and one started after its daily budget is spent.
+     * Uncaught, the refusal crashed the process on every boot, and again on each restart the
+     * system then scheduled for the crashed service.
+     *
+     * Caught as IllegalStateException because ForegroundServiceStartNotAllowedException, its
+     * subclass, only exists from API 31, below which nothing is refused here anyway.
+     */
+    private fun enterForeground(): Boolean =
+        try {
+            ServiceCompat.startForeground(
+                this,
+                SyncNotifications.NOTIFICATION_ID,
+                notifications.build(appContainer.syncEngine.status.value),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+            true
+        } catch (refused: IllegalStateException) {
+            appContainer.log.warn("System refused to run sync in the foreground; the watchdog will retry", refused)
+            SyncWatchdogWorker.schedule(this)
+            false
+        }
+
     private suspend fun runSyncLoop() {
         val container = appContainer
         while (scope.isActive) {
-            val account = container.accountStore.current()
-            if (account == null) {
-                stopSelf()
-                return
-            }
+            // Signed out: the hasWork collector stops the service.
+            val account = container.accountStore.current() ?: return
             val preferences = container.settings.current()
             if (container.networkPolicy.current().allowsSync(preferences.wifiOnly)) {
                 runCatching {
@@ -190,8 +224,18 @@ class SyncForegroundService : Service() {
          */
         private const val WAKE_LOCK_TIMEOUT_MILLIS = 10 * 60 * 1000L
 
+        /**
+         * Android 12+ refuses a foreground start from the background unless the app is exempt
+         * from battery optimisation, and throws to say so. The background callers -- boot, the
+         * watchdog -- can only try again later, so a refusal is logged instead of crashing the
+         * process.
+         */
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, SyncForegroundService::class.java))
+            try {
+                context.startForegroundService(Intent(context, SyncForegroundService::class.java))
+            } catch (refused: IllegalStateException) {
+                context.appContainer.log.warn("System refused to start the sync service", refused)
+            }
         }
 
         fun stop(context: Context) {
